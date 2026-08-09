@@ -1,0 +1,128 @@
+# property-testing-testo
+
+Testo adapter for the property-testing engine: the `#[Property]` attribute,
+reflection conventions, and environment overrides. Drop-in replacement for the
+frozen `rasuvaeff/property-testing` 2.x — same FQCNs, same behaviour. The
+engine itself (generators, shrinking, runner, corpus, state machine) is
+`rasuvaeff/property-testing-core`; see its llms.txt for the full `Gen::*`
+catalog and engine API.
+
+## Install
+
+```bash
+composer require --dev rasuvaeff/property-testing-testo
+```
+
+Migrating from `rasuvaeff/property-testing` 2.x: remove it, require this
+package, change no PHP code. Core `conflict`s with the old package, so a mixed
+installation fails at resolution time.
+
+## Rules
+
+- Drop-in from 2.x: `Rasuvaeff\PropertyTesting\Property`, `Gen`, `Assume`,
+  `Classify`, all exceptions keep their FQCNs; corpora written by 2.8
+  (`PROPERTY_DB`) are read as-is; seed determinism is preserved.
+- Generators/examples methods must be `public static` (`public` if the body
+  needs `$this`) — their only call site is reflection, and Rector's dead-code
+  set deletes private ones.
+- Attribute arguments are constant expressions: generators can NOT be inline.
+  Default convention: `<testMethod>Generators` / `<testMethod>Examples`.
+- An attribute `seed` disables corpus replay for that property; the env
+  `PROPERTY_SEED` does NOT (it only seeds properties whose attribute omits
+  `seed`).
+- `runs` counts successful checks. A discarded run (`Assume::that(false)`) is
+  neither a failure nor a check; the discard budget is `maxDiscards`
+  (default `runs * 10`), exhausting it fails with `GaveUpException`.
+- The adapter aggregates per-run `TestResult` attributes (including Testo
+  codecov's `CoverageResult`) onto the one result a property test reports —
+  property tests participate in coverage and mutation testing.
+
+## API
+
+### `#[Property]` attribute (FQCN `Rasuvaeff\PropertyTesting\Property`)
+
+```php
+#[Property(
+    runs: 100,             // successful checks to complete
+    seed: null,            // pin the random phase; also disables corpus replay
+    generators: null,      // generators method name; default <testMethod>Generators
+    examples: null,        // examples method name; default <testMethod>Examples
+    maxShrinks: null,      // cap accepted shrink steps; 0 disables shrinking
+    maxDiscards: null,     // discard budget; default runs * 10
+    timeoutMs: null,       // per-run wall-clock deadline -> DeadlineExceededException
+    budgetMs: null,        // whole-phase wall-clock budget -> TimeBudgetExceededException
+)]
+```
+
+### Canonical test
+
+```php
+use Rasuvaeff\PropertyTesting\Gen;
+use Rasuvaeff\PropertyTesting\Property;
+use Testo\Assert;
+use Testo\Test;
+
+#[Test]
+final class SortPropertyTest
+{
+    #[Property(runs: 300)]
+    public function sortIsIdempotent(array $values): void
+    {
+        $once = $values;
+        sort($once);
+        $twice = $once;
+        sort($twice);
+
+        Assert::same($twice, $once);
+    }
+
+    /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */
+    public static function sortIsIdempotentGenerators(): array
+    {
+        return ['values' => Gen::arrayOf(Gen::int())];
+    }
+}
+```
+
+### Pinned examples
+
+```php
+/** @return list<array{int, int}> */
+public static function additionCommutesExamples(): array
+{
+    return [[0, 0], [PHP_INT_MAX, 1]]; // run before the random phase, never shrunk
+}
+```
+
+### Environment variables
+
+| Variable | Accepts | Effect |
+|---|---|---|
+| `PROPERTY_RUNS` | positive int | Overrides every property's run count, including the attribute's |
+| `PROPERTY_SEED` | int | Seeds every property whose attribute omits `seed`; attribute wins |
+| `PROPERTY_VERBOSE` | anything but `''`/`'0'` | Logs each run's arguments and each accepted shrink step |
+| `PROPERTY_DB` | directory path | Enables the regression corpus: record on falsification, replay before the random phase, prune on green replay |
+
+### Adapter classes (namespace `Rasuvaeff\PropertyTesting\Testo`)
+
+- `PropertyInterceptor` — self-registering Testo interceptor; resolves
+  reflection + env into a core `PropertyDefinition`, maps the structured
+  `PropertyResult` to one Testo `TestResult`, prints the distribution report
+  and discard warning.
+- `TestoTrialExecutor` — runs the body through Testo's pipeline; merges every
+  run's `TestResult` attributes into the aggregate result.
+- `VerboseListener` — `PROPERTY_VERBOSE` output as an engine event listener;
+  exception-hardened so an output bug cannot fail the run.
+
+### Stateful testing
+
+```php
+#[Property(runs: 200)]
+public function stackBehavesLikeItsModel(CommandSequence $sequence): void
+{
+    StateMachine::check($sequence, static fn(): Stack => new Stack());
+}
+```
+
+`Gen::commands()`, the `Command` interface and `StateMachine::check()` are core
+API — see the core package's llms.txt.
