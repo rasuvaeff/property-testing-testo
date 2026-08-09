@@ -28,6 +28,7 @@ use Rasuvaeff\PropertyTesting\Runner\FilesystemCorpus;
 use Rasuvaeff\PropertyTesting\Runner\PropertyRunner;
 use Rasuvaeff\PropertyTesting\Testo\PropertyInterceptor;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Support\CollectingListener;
+use Rasuvaeff\PropertyTesting\Testo\Tests\Support\Env;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Support\FakeClock;
 use Testo\Application\Internal\MessengerHub;
 use Testo\Assert;
@@ -244,8 +245,7 @@ final class EventOrderTest
         $listener = new CollectingListener();
         $dir = sys_get_temp_dir() . '/event-corpus-' . bin2hex(random_bytes(6));
         mkdir($dir, 0o777, recursive: true);
-        $previous = getenv('PROPERTY_DB');
-        putenv('PROPERTY_DB=' . $dir);
+        $restoreEnv = Env::set('PROPERTY_DB', $dir);
 
         try {
             $result = $this->interceptor($listener)->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $this->failAboveFifty());
@@ -259,7 +259,7 @@ final class EventOrderTest
                 $result->failure->getCounterExample(),
             );
         } finally {
-            $this->restoreEnv('PROPERTY_DB', $previous);
+            $restoreEnv();
             $this->cleanup($dir);
         }
     }
@@ -288,8 +288,7 @@ final class EventOrderTest
      */
     public function verboseListenerSwallowsItsOwnFailure(): void
     {
-        $previous = getenv('PROPERTY_VERBOSE');
-        putenv('PROPERTY_VERBOSE=1');
+        $restoreEnv = Env::set('PROPERTY_VERBOSE', '1');
 
         try {
             $messenger = new MessengerHub(new class implements EventDispatcherInterface {
@@ -304,7 +303,7 @@ final class EventOrderTest
 
             Assert::same($result->status, Status::Passed);
         } finally {
-            $this->restoreEnv('PROPERTY_VERBOSE', $previous);
+            $restoreEnv();
         }
     }
 
@@ -316,8 +315,7 @@ final class EventOrderTest
     {
         $dir = sys_get_temp_dir() . '/event-corpus-' . bin2hex(random_bytes(6));
         mkdir($dir, 0o777, recursive: true);
-        $previous = getenv('PROPERTY_DB');
-        putenv('PROPERTY_DB=' . $dir);
+        $restoreEnv = Env::set('PROPERTY_DB', $dir);
 
         try {
             (new FilesystemCorpus($dir))->remember(
@@ -333,18 +331,9 @@ final class EventOrderTest
 
             $scenario($dir);
         } finally {
-            $this->restoreEnv('PROPERTY_DB', $previous);
+            $restoreEnv();
             $this->cleanup($dir);
         }
-    }
-
-    /**
-     * @param string|false $previous The getenv() reading taken before the test
-     *   overrode the variable.
-     */
-    private function restoreEnv(string $variable, string|false $previous): void
-    {
-        putenv($previous === false ? $variable : $variable . '=' . $previous);
     }
 
     private function cleanup(string $dir): void

@@ -68,7 +68,12 @@ final class SortPropertyTest
     #[Property(runs: 300)]
     public function sortIsIdempotent(array $values): void
     {
-        Assert::same(sorted(sorted($values)), sorted($values));
+        $once = $values;
+        sort($once);
+        $twice = $once;
+        sort($twice);
+
+        Assert::same($twice, $once);
     }
 
     /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */

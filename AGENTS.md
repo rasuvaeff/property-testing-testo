@@ -45,15 +45,17 @@ No PHP/Composer on the host — run in Docker via the `composer:2` image.
 
 `rasuvaeff/property-testing-core` resolves from Packagist — a plain
 `composer install` is enough. Only when testing an **unreleased** core change
-does the sibling checkout need a temporary path repository (run from the
-monorepo root with the whole root mounted, e.g.
-`docker run --rm -v "$PWD":/repo -w /repo/property-testing-testo composer:2 …`):
+does the sibling checkout need a temporary path repository. Run it from the
+monorepo root, with the whole root mounted so the sibling package is visible
+inside the container:
 
 ```bash
-composer config repositories.core '{"type":"path","url":"../property-testing-core","options":{"versions":{"rasuvaeff/property-testing-core":"0.1.0"}}}'
-composer update
-composer config --unset repositories.core
-rm composer.lock
+docker run --rm -v "$PWD":/repo -w /repo/property-testing-testo composer:2 sh -c '
+    composer config repositories.core "{\"type\":\"path\",\"url\":\"../property-testing-core\",\"options\":{\"versions\":{\"rasuvaeff/property-testing-core\":\"0.1.0\"}}}"
+    composer update
+    composer config --unset repositories.core
+    rm composer.lock
+'
 ```
 
 Never commit that `repositories` key or a `composer.lock`.

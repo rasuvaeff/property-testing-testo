@@ -23,6 +23,7 @@ use Rasuvaeff\PropertyTesting\Runner\RegressionFailed;
 use Rasuvaeff\PropertyTesting\Runner\TimeBudgetExceeded;
 use Rasuvaeff\PropertyTesting\Testo\PropertyInterceptor;
 use Rasuvaeff\PropertyTesting\Testo\TestoTrialExecutor;
+use Rasuvaeff\PropertyTesting\Testo\Tests\Support\Env;
 use Rasuvaeff\PropertyTesting\TimeBudgetExceededException;
 use Testo\Application\Internal\MessengerHub;
 use Testo\Assert;
@@ -525,7 +526,7 @@ final class PropertyInterceptorTest
 
     public function envPropertyRunsOverridesTheAttributeRunCount(): void
     {
-        putenv('PROPERTY_RUNS=3');
+        $restoreEnv = Env::set('PROPERTY_RUNS', '3');
 
         try {
             $interceptor = new PropertyInterceptor($this->createMessenger());
@@ -541,13 +542,13 @@ final class PropertyInterceptorTest
 
             Assert::same($calls, 3);
         } finally {
-            putenv('PROPERTY_RUNS');
+            $restoreEnv();
         }
     }
 
     public function envPropertySeedSuppliesTheSeedWhenTheAttributeOmitsIt(): void
     {
-        putenv('PROPERTY_SEED=777');
+        $restoreEnv = Env::set('PROPERTY_SEED', '777');
 
         try {
             $interceptor = new PropertyInterceptor($this->createMessenger());
@@ -560,13 +561,13 @@ final class PropertyInterceptorTest
             Assert::instanceOf($result->failure, PropertyViolationException::class);
             Assert::same($result->failure->getCounterExample()->seed, 777);
         } finally {
-            putenv('PROPERTY_SEED');
+            $restoreEnv();
         }
     }
 
     public function attributeSeedWinsOverTheEnvironmentSeed(): void
     {
-        putenv('PROPERTY_SEED=777');
+        $restoreEnv = Env::set('PROPERTY_SEED', '777');
 
         try {
             $interceptor = new PropertyInterceptor($this->createMessenger());
@@ -582,14 +583,14 @@ final class PropertyInterceptorTest
             Assert::instanceOf($result->failure, PropertyViolationException::class);
             Assert::same($result->failure->getCounterExample()->seed, 1);
         } finally {
-            putenv('PROPERTY_SEED');
+            $restoreEnv();
         }
     }
 
     #[ExpectException(\InvalidArgumentException::class)]
     public function rejectsNonNumericPropertyRuns(): void
     {
-        putenv('PROPERTY_RUNS=abc');
+        $restoreEnv = Env::set('PROPERTY_RUNS', 'abc');
 
         try {
             $interceptor = new PropertyInterceptor($this->createMessenger());
@@ -597,14 +598,14 @@ final class PropertyInterceptorTest
 
             $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
         } finally {
-            putenv('PROPERTY_RUNS');
+            $restoreEnv();
         }
     }
 
     #[ExpectException(\InvalidArgumentException::class)]
     public function rejectsNonNumericPropertySeed(): void
     {
-        putenv('PROPERTY_SEED=abc');
+        $restoreEnv = Env::set('PROPERTY_SEED', 'abc');
 
         try {
             $interceptor = new PropertyInterceptor($this->createMessenger());
@@ -612,7 +613,7 @@ final class PropertyInterceptorTest
 
             $interceptor->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $next);
         } finally {
-            putenv('PROPERTY_SEED');
+            $restoreEnv();
         }
     }
 
@@ -763,7 +764,7 @@ final class PropertyInterceptorTest
 
     public function verboseLogsEveryRunsArguments(): void
     {
-        putenv('PROPERTY_VERBOSE=1');
+        $restoreEnv = Env::set('PROPERTY_VERBOSE', '1');
 
         try {
             $messenger = $this->createMessenger();
@@ -778,13 +779,13 @@ final class PropertyInterceptorTest
             Assert::string($messages[0]->content)->contains('attempt 1: x=');
             Assert::string($messages[4]->content)->contains('attempt 5: x=');
         } finally {
-            putenv('PROPERTY_VERBOSE');
+            $restoreEnv();
         }
     }
 
     public function verboseLogsEveryAcceptedShrinkStep(): void
     {
-        putenv('PROPERTY_VERBOSE=1');
+        $restoreEnv = Env::set('PROPERTY_VERBOSE', '1');
 
         try {
             $messenger = $this->createMessenger();
@@ -810,13 +811,13 @@ final class PropertyInterceptorTest
             Assert::string($trace[0]->content)->contains('shrink step 1: x=');
             Assert::string($trace[$steps - 1]->content)->contains('-> 51');
         } finally {
-            putenv('PROPERTY_VERBOSE');
+            $restoreEnv();
         }
     }
 
     public function verboseZeroDisablesTheRunLog(): void
     {
-        putenv('PROPERTY_VERBOSE=0');
+        $restoreEnv = Env::set('PROPERTY_VERBOSE', '0');
 
         try {
             $messenger = $this->createMessenger();
@@ -827,13 +828,13 @@ final class PropertyInterceptorTest
 
             Assert::same(count($messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT)), 0);
         } finally {
-            putenv('PROPERTY_VERBOSE');
+            $restoreEnv();
         }
     }
 
     public function verboseRendersEveryArgumentStyle(): void
     {
-        putenv('PROPERTY_VERBOSE=1');
+        $restoreEnv = Env::set('PROPERTY_VERBOSE', '1');
 
         try {
             $messenger = $this->createMessenger();
@@ -853,13 +854,13 @@ final class PropertyInterceptorTest
             Assert::string($messages[0]->content)->contains('d=1970-01-01');
             Assert::string($messages[0]->content)->contains('i=7');
         } finally {
-            putenv('PROPERTY_VERBOSE');
+            $restoreEnv();
         }
     }
 
     public function verboseRendersStringableArgumentsViaToString(): void
     {
-        putenv('PROPERTY_VERBOSE=1');
+        $restoreEnv = Env::set('PROPERTY_VERBOSE', '1');
 
         try {
             $messenger = $this->createMessenger();
@@ -872,7 +873,7 @@ final class PropertyInterceptorTest
             Assert::same(count($messages), 1);
             Assert::string($messages[0]->content)->contains('s=STRINGABLE');
         } finally {
-            putenv('PROPERTY_VERBOSE');
+            $restoreEnv();
         }
     }
 
@@ -1111,7 +1112,7 @@ final class PropertyInterceptorTest
     public function recordsTheMinimisedFailureWhenStorageEnabled(): void
     {
         $dir = $this->tempStorageDir();
-        putenv('PROPERTY_DB=' . $dir);
+        $restoreEnv = Env::set('PROPERTY_DB', $dir);
 
         try {
             $interceptor = new PropertyInterceptor($this->createMessenger());
@@ -1134,7 +1135,7 @@ final class PropertyInterceptorTest
             Assert::same($entries[0]->arguments, $result->failure->getCounterExample()->shrunkArguments);
             Assert::same($entries[0]->seed, $result->failure->getCounterExample()->seed);
         } finally {
-            putenv('PROPERTY_DB');
+            $restoreEnv();
             $this->cleanupDir($dir);
         }
     }
@@ -1142,7 +1143,7 @@ final class PropertyInterceptorTest
     public function replaysARecordedInputBeforeTheRandomPhase(): void
     {
         $dir = $this->tempStorageDir();
-        putenv('PROPERTY_DB=' . $dir);
+        $restoreEnv = Env::set('PROPERTY_DB', $dir);
 
         try {
             (new FilesystemCorpus($dir))->remember(
@@ -1169,7 +1170,7 @@ final class PropertyInterceptorTest
             Assert::same($result->failure->getSeed(), 4242);
             Assert::same($seen, [[77]]);
         } finally {
-            putenv('PROPERTY_DB');
+            $restoreEnv();
             $this->cleanupDir($dir);
         }
     }
@@ -1177,7 +1178,7 @@ final class PropertyInterceptorTest
     public function prunesARecordedInputWhenTheReplayNoLongerFails(): void
     {
         $dir = $this->tempStorageDir();
-        putenv('PROPERTY_DB=' . $dir);
+        $restoreEnv = Env::set('PROPERTY_DB', $dir);
 
         try {
             $storage = new FilesystemCorpus($dir);
@@ -1192,7 +1193,7 @@ final class PropertyInterceptorTest
             Assert::same($result->status, Status::Passed);
             Assert::same($storage->recall($id, ['x']), []);
         } finally {
-            putenv('PROPERTY_DB');
+            $restoreEnv();
             $this->cleanupDir($dir);
         }
     }
@@ -1204,7 +1205,7 @@ final class PropertyInterceptorTest
     public function prunesARecordedInputTheReplayDiscards(): void
     {
         $dir = $this->tempStorageDir();
-        putenv('PROPERTY_DB=' . $dir);
+        $restoreEnv = Env::set('PROPERTY_DB', $dir);
 
         try {
             $storage = new FilesystemCorpus($dir);
@@ -1225,7 +1226,7 @@ final class PropertyInterceptorTest
             Assert::instanceOf($result->failure, GaveUpException::class);
             Assert::same($storage->recall($id, ['x']), []);
         } finally {
-            putenv('PROPERTY_DB');
+            $restoreEnv();
             $this->cleanupDir($dir);
         }
     }
@@ -1233,7 +1234,7 @@ final class PropertyInterceptorTest
     public function replaysARecordedSeedFirst(): void
     {
         $dir = $this->tempStorageDir();
-        putenv('PROPERTY_DB=' . $dir);
+        $restoreEnv = Env::set('PROPERTY_DB', $dir);
 
         try {
             // A counterexample the codec cannot represent is stored as a seed; the
@@ -1252,7 +1253,7 @@ final class PropertyInterceptorTest
             Assert::instanceOf($result->failure, PropertyViolationException::class);
             Assert::same($result->failure->getCounterExample()->seed, 999);
         } finally {
-            putenv('PROPERTY_DB');
+            $restoreEnv();
             $this->cleanupDir($dir);
         }
     }
@@ -1260,7 +1261,7 @@ final class PropertyInterceptorTest
     public function prunesARecordedSeedWhenTheReplayNoLongerFails(): void
     {
         $dir = $this->tempStorageDir();
-        putenv('PROPERTY_DB=' . $dir);
+        $restoreEnv = Env::set('PROPERTY_DB', $dir);
 
         try {
             $id = NoSeedFalsifyingStub::class . '::check';
@@ -1274,7 +1275,7 @@ final class PropertyInterceptorTest
             Assert::same($result->status, Status::Passed);
             Assert::same((new FilesystemCorpus($dir))->recall($id, ['x']), []);
         } finally {
-            putenv('PROPERTY_DB');
+            $restoreEnv();
             $this->cleanupDir($dir);
         }
     }
@@ -1282,7 +1283,7 @@ final class PropertyInterceptorTest
     public function attributeSeedDisablesReplay(): void
     {
         $dir = $this->tempStorageDir();
-        putenv('PROPERTY_DB=' . $dir);
+        $restoreEnv = Env::set('PROPERTY_DB', $dir);
 
         try {
             // FalsifyingStub pins seed:1; a stored regression must be ignored so
@@ -1305,7 +1306,7 @@ final class PropertyInterceptorTest
             Assert::instanceOf($result->failure, PropertyViolationException::class);
             Assert::same($result->failure->getCounterExample()->seed, 1);
         } finally {
-            putenv('PROPERTY_DB');
+            $restoreEnv();
             $this->cleanupDir($dir);
         }
     }
@@ -1338,18 +1339,22 @@ final class PropertyInterceptorTest
 
     public function storageDisabledWritesNothingAndDoesNotCrash(): void
     {
-        putenv('PROPERTY_DB');
+        $restoreEnv = Env::set('PROPERTY_DB', null);
 
-        $interceptor = new PropertyInterceptor($this->createMessenger());
-        $next = static fn(TestInfo $info): TestResult => new TestResult(
-            info: $info,
-            status: Status::Failed,
-            failure: new \RuntimeException('always'),
-        );
+        try {
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static fn(TestInfo $info): TestResult => new TestResult(
+                info: $info,
+                status: Status::Failed,
+                failure: new \RuntimeException('always'),
+            );
 
-        $result = $interceptor->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $next);
+            $result = $interceptor->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $next);
 
-        Assert::instanceOf($result->failure, PropertyViolationException::class);
+            Assert::instanceOf($result->failure, PropertyViolationException::class);
+        } finally {
+            $restoreEnv();
+        }
     }
 
     private function tempStorageDir(): string

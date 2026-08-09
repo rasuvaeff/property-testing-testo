@@ -19,6 +19,7 @@ use Rasuvaeff\PropertyTesting\RegressionViolationException;
 use Rasuvaeff\PropertyTesting\Runner\FilesystemCorpus;
 use Rasuvaeff\PropertyTesting\Runner\PropertyRunner;
 use Rasuvaeff\PropertyTesting\Testo\PropertyInterceptor;
+use Rasuvaeff\PropertyTesting\Testo\Tests\Support\Env;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Support\FakeClock;
 use Rasuvaeff\PropertyTesting\TimeBudgetExceededException;
 use Testo\Application\Internal\MessengerHub;
@@ -196,7 +197,7 @@ final class GoldenMessagesTest
     {
         $dir = sys_get_temp_dir() . '/golden-corpus-' . bin2hex(random_bytes(6));
         mkdir($dir, 0o777, recursive: true);
-        putenv('PROPERTY_DB=' . $dir);
+        $restoreEnv = Env::set('PROPERTY_DB', $dir);
 
         try {
             (new FilesystemCorpus($dir))->remember(
@@ -218,7 +219,7 @@ final class GoldenMessagesTest
                 "Recorded regression failed (originally found with seed 7): x=51\n  Failure:  x>50",
             );
         } finally {
-            putenv('PROPERTY_DB');
+            $restoreEnv();
             array_map(unlink(...), array_merge(glob($dir . '/*.json') ?: [], glob($dir . '/*.lock') ?: []));
             rmdir($dir);
         }

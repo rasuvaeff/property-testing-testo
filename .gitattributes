@@ -15,6 +15,3 @@
 /ROADMAP.md export-ignore
 /testo.php export-ignore
 /tests export-ignore
-
-# Byte-exact golden fixtures: no eol conversion on any platform
-/tests/fixtures/** -text

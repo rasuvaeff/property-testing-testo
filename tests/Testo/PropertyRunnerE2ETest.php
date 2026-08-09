@@ -21,6 +21,7 @@ use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\ExampleFailingFixture;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\ExhaustedFixture;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\FalsifyingPropertyFixture;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\GaveUpFixture;
+use Rasuvaeff\PropertyTesting\Testo\Tests\Support\Env;
 use Testo\Assert;
 use Testo\Codecov\CoversNothing;
 use Testo\Core\Value\Status;
@@ -147,7 +148,10 @@ final class PropertyRunnerE2ETest
     {
         $dir = sys_get_temp_dir() . '/e2e-corpus-' . bin2hex(random_bytes(6));
         mkdir($dir, 0o777, recursive: true);
-        putenv('PROPERTY_DB=' . $dir);
+        // FIXTURE_PASS must start unset: the fixture passes while it is set, and
+        // a caller that exported it would make the first run pass and the
+        // PropertyViolationException assertion below fail.
+        $restoreEnv = Env::setMany(['PROPERTY_DB' => $dir, 'FIXTURE_PASS' => null]);
         $propertyId = CorpusRegressionFixture::class . '::everyValueIsAtMostFifty';
 
         try {
@@ -162,14 +166,13 @@ final class PropertyRunnerE2ETest
                 $recorded->failure->getCounterExample()->shrunkArguments,
             );
 
-            putenv('FIXTURE_PASS=1');
+            putenv('FIXTURE_PASS=1');   // undone by $restoreEnv below
             $fixed = TestRunner::runTest([CorpusRegressionFixture::class, 'everyValueIsAtMostFifty']);
             Assert::same($fixed->status, Status::Passed);
             // The replay passed, so the entry served its purpose and is gone.
             Assert::same((new FilesystemCorpus($dir))->recall($propertyId, ['x']), []);
         } finally {
-            putenv('FIXTURE_PASS');
-            putenv('PROPERTY_DB');
+            $restoreEnv();
             array_map(unlink(...), array_merge(glob($dir . '/*.json') ?: [], glob($dir . '/*.lock') ?: []));
             rmdir($dir);
         }
