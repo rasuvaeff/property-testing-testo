@@ -1,0 +1,93 @@
+{
+    "name": "rasuvaeff/property-testing-testo",
+    "description": "Testo adapter for the property-testing engine: the #[Property] attribute, drop-in for rasuvaeff/property-testing",
+    "license": "BSD-3-Clause",
+    "type": "library",
+    "keywords": [
+        "property-testing",
+        "quickcheck",
+        "testing",
+        "testo",
+        "fuzzing",
+        "shrinking"
+    ],
+    "authors": [
+        {
+            "name": "Victor Razuvaev",
+            "email": "rasuvaeff@gmail.com"
+        }
+    ],
+    "homepage": "https://github.com/rasuvaeff/property-testing-testo",
+    "support": {
+        "issues": "https://github.com/rasuvaeff/property-testing-testo/issues",
+        "source": "https://github.com/rasuvaeff/property-testing-testo"
+    },
+    "require": {
+        "php": "8.3 - 8.5",
+        "rasuvaeff/property-testing-core": "^0.1",
+        "testo/testo": "^0.10.39 || ^1.0"
+    },
+    "require-dev": {
+        "ergebnis/composer-normalize": "^2.51",
+        "friendsofphp/php-cs-fixer": "^3.95",
+        "infection/infection": "^0.33 || ^0.34",
+        "internal/path": "^1.2",
+        "maglnet/composer-require-checker": "^4.17",
+        "rasuvaeff/rector-named-literals": "^1.0",
+        "rector/rector": "^2.4",
+        "roave/backward-compatibility-check": "^8.0",
+        "testo/bridge-infection": "^0.1.6",
+        "vimeo/psalm": "^6.16"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rasuvaeff\\PropertyTesting\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Rasuvaeff\\PropertyTesting\\Benchmarks\\": "benchmarks/",
+            "Rasuvaeff\\PropertyTesting\\Testo\\Tests\\": "tests/Testo/",
+            "Rasuvaeff\\PropertyTesting\\Testo\\Tests\\Fixture\\": "tests/Fixture/",
+            "Rasuvaeff\\PropertyTesting\\Testo\\Tests\\Support\\": "tests/Support/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "ergebnis/composer-normalize": true,
+            "infection/extension-installer": true
+        },
+        "platform": {
+            "ext-bcmath": "1.0.0",
+            "ext-intl": "1.0.0"
+        },
+        "sort-packages": true
+    },
+    "scripts": {
+        "bc-check": "roave-backward-compatibility-check",
+        "bench": "testo --suite=Benchmarks -vv",
+        "build": [
+            "@composer validate --strict",
+            "@composer normalize --dry-run",
+            "@require-checker",
+            "@cs",
+            "@psalm",
+            "@test"
+        ],
+        "cs": "php-cs-fixer fix --dry-run --diff --config=.php-cs-fixer.php",
+        "cs:fix": "php-cs-fixer fix --diff --config=.php-cs-fixer.php",
+        "mutation": "infection --threads=max",
+        "psalm": "psalm --no-cache",
+        "rector": "rector process --dry-run",
+        "rector:fix": "rector process",
+        "release-check": [
+            "@build",
+            "@rector",
+            "@bc-check"
+        ],
+        "require-checker": "composer-require-checker check composer.json",
+        "test": "testo --suite=Unit",
+        "test:coverage": "testo --suite=Unit --coverage --coverage-clover=build/coverage.xml",
+        "test:coverage:ci": "testo --suite=Unit --coverage-clover=build/coverage.xml"
+    }
+}
