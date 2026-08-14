@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-08-14
 
 - Added the 0.2 run knobs to `#[Property]` and to the environment: `shrink`
   and `shrinkBudgetMs` (report a counterexample as generated, or bound the
