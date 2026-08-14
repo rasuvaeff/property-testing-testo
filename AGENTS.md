@@ -51,7 +51,7 @@ inside the container:
 
 ```bash
 docker run --rm -v "$PWD":/repo -w /repo/property-testing-testo composer:2 sh -c '
-    composer config repositories.core "{\"type\":\"path\",\"url\":\"../property-testing-core\",\"options\":{\"versions\":{\"rasuvaeff/property-testing-core\":\"0.1.0\"}}}"
+    composer config repositories.core "{\"type\":\"path\",\"url\":\"../property-testing-core\",\"options\":{\"versions\":{\"rasuvaeff/property-testing-core\":\"0.2.0\"}}}"
     composer update
     composer config --unset repositories.core
     rm composer.lock
