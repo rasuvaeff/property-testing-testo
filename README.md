@@ -117,7 +117,12 @@ Property falsified after 246 successful run(s); seed=7382910
 ```
 
 Reproduce the exact run by passing the reported seed back to the attribute:
-`#[Property(runs: 500, seed: 7382910)]`.
+`#[Property(runs: 500, seed: 7382910)]`. The message also ends with a `Path:`
+line — the shrink steps that were accepted — and passing that back beside the
+seed (`#[Property(seed: 7382910, path: 'attempts:1/attempts:3')]`, or
+`PROPERTY_SEED=… PROPERTY_PATH=…`) follows the descent instead of searching for
+it again. The excerpt above is trimmed; a real run prints `Failure:` and
+`Path:` too.
 
 ### Conventions
 
