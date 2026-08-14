@@ -11,7 +11,7 @@ use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\CounterExample;
 use Rasuvaeff\PropertyTesting\CoverageViolationException;
 use Rasuvaeff\PropertyTesting\DeadlineExceededException;
-use Rasuvaeff\PropertyTesting\Event\RunStarted;
+use Rasuvaeff\PropertyTesting\Event\PropertyStarted;
 use Rasuvaeff\PropertyTesting\ExampleViolationException;
 use Rasuvaeff\PropertyTesting\GaveUpException;
 use Rasuvaeff\PropertyTesting\Gen;
@@ -685,18 +685,21 @@ final class PropertyInterceptorTest
 
     public function derandomizeMakesAnUnseededPropertyRepeatItself(): void
     {
+        // The seed is what the knob decides, and PropertyStarted reports the
+        // one the engine ran with — comparing generated values would also pass
+        // for a generator that ignored its seed.
         Assert::same(
-            $this->firstArguments(DerandomizedStub::class),
-            $this->firstArguments(DerandomizedStub::class),
+            $this->resolvedSeed(DerandomizedStub::class),
+            $this->resolvedSeed(DerandomizedStub::class),
         );
     }
 
     public function withoutDerandomizeAnUnseededPropertyDrawsAFreshSeed(): void
     {
-        // The other half: without the knob the two runs are independent, so the
-        // assertion above is about derandomization rather than a degenerate
-        // generator.
-        Assert::false($this->firstArguments(UnseededStub::class) === $this->firstArguments(UnseededStub::class));
+        // The other half: without the knob the two runs draw independent seeds,
+        // so the assertion above is about derandomization rather than a
+        // degenerate generator.
+        Assert::false($this->resolvedSeed(UnseededStub::class) === $this->resolvedSeed(UnseededStub::class));
     }
 
     public function envPropertyDerandomizeOverridesTheAttribute(): void
@@ -705,8 +708,8 @@ final class PropertyInterceptorTest
 
         try {
             Assert::same(
-                $this->firstArguments(UnseededStub::class),
-                $this->firstArguments(UnseededStub::class),
+                $this->resolvedSeed(UnseededStub::class),
+                $this->resolvedSeed(UnseededStub::class),
             );
         } finally {
             $restoreEnv();
@@ -719,7 +722,7 @@ final class PropertyInterceptorTest
 
         try {
             Assert::false(
-                $this->firstArguments(DerandomizedStub::class) === $this->firstArguments(UnseededStub::class),
+                $this->resolvedSeed(UnseededStub::class) === $this->resolvedSeed(UnseededStub::class),
             );
         } finally {
             $restoreEnv();
@@ -750,6 +753,14 @@ final class PropertyInterceptorTest
                 $replayed->failure->getCounterExample()->shrunkArguments,
                 $first->failure->getCounterExample()->shrunkArguments,
             );
+            // A path is followed, not searched for: one body execution per
+            // recorded step instead of one per candidate tried. The trial count
+            // is what fails if the variable is ignored, since a deterministic
+            // search reproduces the same path anyway.
+            Assert::true(
+                $replayed->failure->getCounterExample()->shrinkTrials
+                    < $first->failure->getCounterExample()->shrinkTrials,
+            );
         } finally {
             $restoreEnv();
         }
@@ -767,13 +778,12 @@ final class PropertyInterceptorTest
     }
 
     /**
-     * The arguments of the first run of $stub, as the events saw them.
+     * The seed the engine ran $stub with, as PropertyStarted reports it — the
+     * one observable that says what a seed knob decided.
      *
      * @param class-string $stub
-     *
-     * @return list<mixed>
      */
-    private function firstArguments(string $stub): array
+    private function resolvedSeed(string $stub): int
     {
         $listener = new CollectingListener();
         $interceptor = new PropertyInterceptor($this->createMessenger(), listeners: [$listener]);
@@ -782,12 +792,12 @@ final class PropertyInterceptorTest
         $interceptor->runTest($this->info($stub, 'check'), $next);
 
         foreach ($listener->events as $event) {
-            if ($event instanceof RunStarted) {
-                return array_values($event->arguments);
+            if ($event instanceof PropertyStarted) {
+                return $event->seed;
             }
         }
 
-        Assert::fail('No RunStarted event was recorded');
+        Assert::fail('No PropertyStarted event was recorded');
     }
 
     #[ExpectException(\InvalidArgumentException::class)]
