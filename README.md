@@ -145,8 +145,19 @@ Rector's dead-code set would delete private ones.
 | `maxDiscards` | Discard budget before the property fails with `GaveUpException`; default `runs * 10` |
 | `timeoutMs` | Wall-clock deadline for a single run — exceeding it fails the property with `DeadlineExceededException` |
 | `budgetMs` | Wall-clock budget for the whole random phase — running out fails with `TimeBudgetExceededException` |
+| `shrink` | `ShrinkMode::Full` (default), `Off` (report the input as generated) or `Bounded` with a budget |
+| `shrinkBudgetMs` | Wall-clock budget for the descent — the one knob that costs determinism, since how far it gets depends on how long the body takes |
+| `phases` | Stages to perform (`Phase::Examples`, `Corpus`, `Random`, `Shrink`); a subset trades coverage for time on purpose |
+| `derandomize` | Derives an unset seed from the property id instead of drawing one; an attribute `seed` still wins |
+| `path` | Replays a recorded shrink descent (`CounterExample::$path`) instead of searching for it; requires `seed` |
 
 ### Environment overrides
+
+One rule decides who wins: **the environment dials the suite, the attribute
+pins the property.** `PROPERTY_RUNS`, `PROPERTY_PHASES` and
+`PROPERTY_DERANDOMIZE` are CI knobs and override the attribute;
+`PROPERTY_SEED` and `PROPERTY_PATH` replay one specific failure and yield to
+what the attribute wrote down.
 
 | Variable | Effect |
 |---|---|
@@ -154,6 +165,9 @@ Rector's dead-code set would delete private ones.
 | `PROPERTY_SEED` | Integer seed for any property whose attribute omits `seed` (replay a whole suite). An explicit attribute `seed` still wins |
 | `PROPERTY_VERBOSE` | Any value except `''`/`'0'` logs every run's generated arguments and each accepted shrink step |
 | `PROPERTY_DB` | Directory path enabling the regression corpus. Unset means off, nothing is written |
+| `PROPERTY_PHASES` | Comma-separated stage list (`examples,corpus,random,shrink`, case-insensitive) that overrides the attribute — an unknown name throws rather than skipping a stage. `examples,corpus` is the fast pull-request gate |
+| `PROPERTY_DERANDOMIZE` | Any value except `''`/`'0'` derives every unset seed from the property id, making a whole suite reproducible without editing it |
+| `PROPERTY_PATH` | A recorded shrink descent replayed instead of searched for. Needs the seed that produced it; an attribute `path` wins |
 
 ### Regression corpus
 

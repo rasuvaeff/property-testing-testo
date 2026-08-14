@@ -12,6 +12,7 @@ use Rasuvaeff\PropertyTesting\Runner\CoverageFailed;
 use Rasuvaeff\PropertyTesting\Runner\FilesystemCorpus;
 use Rasuvaeff\PropertyTesting\Runner\GaveUp;
 use Rasuvaeff\PropertyTesting\Runner\Passed;
+use Rasuvaeff\PropertyTesting\Runner\Phase;
 use Rasuvaeff\PropertyTesting\Runner\PropertyConfig;
 use Rasuvaeff\PropertyTesting\Runner\PropertyDefinition;
 use Rasuvaeff\PropertyTesting\Runner\PropertyResult;
@@ -49,6 +50,21 @@ use Testo\Pipeline\Middleware\TestRunInterceptor;
 )]
 final readonly class PropertyInterceptor implements TestRunInterceptor
 {
+    /**
+     * Phase names accepted by `PROPERTY_PHASES`, lowercase. Spelled out rather
+     * than derived from the enum: the variable is a public contract shared
+     * with the PHPUnit adapter, and it must not start accepting a new spelling
+     * merely because a case was renamed upstream.
+     *
+     * @var array<string, Phase>
+     */
+    private const array PHASES_BY_NAME = [
+        'examples' => Phase::Examples,
+        'corpus' => Phase::Corpus,
+        'random' => Phase::Random,
+        'shrink' => Phase::Shrink,
+    ];
+
     /**
      * Warn when more than this fraction of runs is discarded via {@see \Rasuvaeff\PropertyTesting\Assume::that()}.
      */
@@ -93,6 +109,8 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
 
         $property = $attributes[0]->newInstance();
 
+        $derandomize = $this->resolveDerandomize($property->derandomize);
+
         $definition = new PropertyDefinition(
             id: $reflection->getDeclaringClass()->getName() . '::' . $reflection->getName(),
             name: $info->name,
@@ -103,11 +121,20 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             ),
             config: new PropertyConfig(
                 runs: $this->resolveRuns($property->runs),
-                seed: $this->resolveSeed($property->seed),
+                seed: $this->resolveSeed($property->seed, $derandomize),
                 maxShrinks: $property->maxShrinks,
                 maxDiscards: $property->maxDiscards,
                 timeoutMs: $property->timeoutMs,
                 budgetMs: $property->budgetMs,
+                shrink: $property->shrink,
+                shrinkBudgetMs: $property->shrinkBudgetMs,
+                // The environment dials the suite; the attribute pins the
+                // property. A phase list and derandomization are CI knobs, so
+                // the variables win; a seed and a path replay one specific
+                // failure and yield to what the attribute wrote down.
+                phases: $this->resolvePhases($property->phases),
+                derandomize: $derandomize,
+                path: $property->path ?? $this->resolvePath(),
             ),
             examples: $this->resolveExamples($reflection, $info, $property),
             // A pinned attribute seed wins over the corpus: replaying recorded
@@ -188,6 +215,78 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
     }
 
     /**
+     * `PROPERTY_PHASES` selects the stages for the whole suite: a
+     * comma-separated list of phase names, case-insensitive
+     * (`examples,corpus` is the fast pull-request gate). It overrides the
+     * attribute, and an unknown name is an error rather than a skipped stage —
+     * a run that silently performed fewer stages would report green having
+     * checked less.
+     *
+     * @param ?list<Phase> $attributePhases
+     *
+     * @return ?list<Phase>
+     */
+    private function resolvePhases(?array $attributePhases): ?array
+    {
+        $env = getenv('PROPERTY_PHASES');
+
+        if ($env === false || $env === '') {
+            return $attributePhases;
+        }
+
+        $phases = [];
+
+        foreach (explode(',', $env) as $name) {
+            $trimmed = trim($name);
+            $phase = self::PHASES_BY_NAME[strtolower($trimmed)] ?? null;
+
+            if ($phase === null) {
+                throw new \InvalidArgumentException(sprintf(
+                    'PROPERTY_PHASES must be a comma-separated list of %s, got "%s"',
+                    implode(', ', array_keys(self::PHASES_BY_NAME)),
+                    $trimmed,
+                ));
+            }
+
+            $phases[] = $phase;
+        }
+
+        return $phases;
+    }
+
+    /**
+     * `PROPERTY_DERANDOMIZE` (any value except '' and '0') derives every unset
+     * seed from the property id, which makes a whole suite reproducible
+     * without editing a line of it. It overrides the attribute.
+     */
+    private function resolveDerandomize(bool $attributeDerandomize): bool
+    {
+        $env = getenv('PROPERTY_DERANDOMIZE');
+
+        if ($env === false || $env === '') {
+            return $attributeDerandomize;
+        }
+
+        return $env !== '0';
+    }
+
+    /**
+     * `PROPERTY_PATH` replays a recorded shrink descent. It is one failure's
+     * replay, so the attribute wins over it, exactly as an attribute seed wins
+     * over `PROPERTY_SEED`.
+     */
+    private function resolvePath(): ?string
+    {
+        $env = getenv('PROPERTY_PATH');
+
+        if ($env === false || $env === '') {
+            return null;
+        }
+
+        return $env;
+    }
+
+    /**
      * `PROPERTY_VERBOSE` (any value except '' and '0') logs every run's
      * generated arguments — for debugging a property whose failure depends on
      * inputs you cannot see in the counterexample alone.
@@ -204,7 +303,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
      * whole suite (handy for replaying a CI failure); otherwise a random seed is
      * drawn. `PROPERTY_SEED`, when set, must be an integer.
      */
-    private function resolveSeed(?int $attributeSeed): int
+    private function resolveSeed(?int $attributeSeed, bool $derandomize): ?int
     {
         if ($attributeSeed !== null) {
             return $attributeSeed;
@@ -213,7 +312,11 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         $env = getenv('PROPERTY_SEED');
 
         if ($env === false || $env === '') {
-            return random_int(0, PHP_INT_MAX);
+            // Unseeded: the adapter normally draws the seed so the value is
+            // decided in one place, but a derandomized run must reach the
+            // engine with none — deriving it from the property id is something
+            // only the engine can do, because only it knows the id.
+            return $derandomize ? null : random_int(0, PHP_INT_MAX);
         }
 
         if (preg_match('/^-?\d+\z/', $env) !== 1) {
@@ -345,7 +448,9 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
     /**
      * Print the share of (passing) runs that hit each {@see \Rasuvaeff\PropertyTesting\Classify} label.
      *
-     * @param array<string, int> $classifications
+     * @param array<array-key, int> $classifications Keyed by label — `array-key` because PHP stores
+     *        a numeric label such as `'42'` under an integer key, which is what the engine's own
+     *        counters declare since core 0.2.
      */
     private function reportClassifications(string $name, array $classifications, int $checks): void
     {

@@ -51,7 +51,7 @@ inside the container:
 
 ```bash
 docker run --rm -v "$PWD":/repo -w /repo/property-testing-testo composer:2 sh -c '
-    composer config repositories.core "{\"type\":\"path\",\"url\":\"../property-testing-core\",\"options\":{\"versions\":{\"rasuvaeff/property-testing-core\":\"0.1.0\"}}}"
+    composer config repositories.core "{\"type\":\"path\",\"url\":\"../property-testing-core\",\"options\":{\"versions\":{\"rasuvaeff/property-testing-core\":\"0.2.0\"}}}"
     composer update
     composer config --unset repositories.core
     rm composer.lock
@@ -100,6 +100,21 @@ environment). The table must stay verbatim-equivalent to what
 | `PROPERTY_SEED` | Only when the attribute omits `seed` (attribute wins) | `/^-?\d+\z/` | Seeds every unseeded property; unset means `random_int(0, PHP_INT_MAX)` per property | `InvalidArgumentException` |
 | `PROPERTY_VERBOSE` | Always | Any value except `''` and `'0'` enables | Logs every run's arguments/draws and each accepted shrink step to stdout | n/a (falsy values disable) |
 | `PROPERTY_DB` | Always (`false`/`''` = off, nothing written) | Directory path (created on demand) | Enables the regression corpus: record on falsification, replay before the random phase, prune on green replay. An attribute `seed` disables replay for that property | n/a |
+| `PROPERTY_PHASES` | Always (`false`/`''` = unset) | Comma-separated phase names, case-insensitive: `examples`, `corpus`, `random`, `shrink` | Stages of every run, in run order — **overrides** the attribute | `InvalidArgumentException` naming the accepted values |
+| `PROPERTY_DERANDOMIZE` | Always | Any value except `''` and `'0'` enables | Derives every unset seed from the property id — **overrides** the attribute | n/a (falsy values disable) |
+| `PROPERTY_PATH` | Only when the attribute omits `path` | A recorded `CounterExample::$path` | Replays that shrink descent instead of searching for it; needs the seed of the run that produced it | engine rejects a path that would be a silent no-op |
+
+The split is deliberate and worth stating: **the environment dials the suite,
+the attribute pins the property.** `PROPERTY_RUNS`, `PROPERTY_PHASES` and
+`PROPERTY_DERANDOMIZE` are CI knobs and win; `PROPERTY_SEED` and
+`PROPERTY_PATH` replay one specific failure and yield to the attribute. The
+same table, with the same messages, is the PHPUnit adapter's — parity is a
+golden rule, and these three were added to both in the same wave.
+
+One asymmetry the code makes explicit: this adapter normally draws the seed
+itself, so `PropertyConfig::$seed` is never null — except under
+derandomization, where it must be, because deriving a seed from the property
+id is something only the engine can do (only it knows the id).
 
 `maxDiscards` has no env override: unset means `runs * 10`, saturating to
 `PHP_INT_MAX` when `runs > PHP_INT_MAX / 10`.

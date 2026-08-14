@@ -7,6 +7,8 @@ namespace Rasuvaeff\PropertyTesting\Testo\Tests;
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Gen;
 use Rasuvaeff\PropertyTesting\Property;
+use Rasuvaeff\PropertyTesting\Runner\Phase;
+use Rasuvaeff\PropertyTesting\Runner\ShrinkMode;
 
 /**
  * Fixtures for {@see \Rasuvaeff\PropertyTesting\Testo\Tests\PropertyInterceptorTest}.
@@ -436,5 +438,77 @@ final class ExhaustedStub
     public static function provide(): array
     {
         return ['x' => Gen::filter(Gen::intBetween(1, 10), static fn(int $n): bool => $n > 10)];
+    }
+}
+
+final class ShrinkOffStub
+{
+    #[Property(runs: 100, seed: 42, generators: 'provide', shrink: ShrinkMode::Off)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(0, 10_000)];
+    }
+}
+
+final class ExamplesAndCorpusOnlyStub
+{
+    #[Property(runs: 100, seed: 42, generators: 'provide', phases: [Phase::Examples, Phase::Corpus])]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(0, 10_000)];
+    }
+}
+
+final class DerandomizedStub
+{
+    #[Property(runs: 1, generators: 'provide', derandomize: true)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(0, 1_000_000)];
+    }
+}
+
+final class UnseededStub
+{
+    #[Property(runs: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(0, 1_000_000)];
+    }
+}
+
+final class ShrinkBudgetStub
+{
+    #[Property(runs: 10, seed: 5, generators: 'provide', shrinkBudgetMs: 60_000)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(0, 10)];
+    }
+}
+
+final class ShrinkPathStub
+{
+    #[Property(runs: 100, seed: 4242, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(0, 10_000)];
     }
 }

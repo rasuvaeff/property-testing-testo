@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- Added the 0.2 run knobs to `#[Property]` and to the environment: `shrink`
+  and `shrinkBudgetMs` (report a counterexample as generated, or bound the
+  descent), `phases` (`PROPERTY_PHASES`), `derandomize`
+  (`PROPERTY_DERANDOMIZE`) and `path` (`PROPERTY_PATH`, replaying a recorded
+  shrink descent instead of searching for it again). Precedence follows one
+  rule, now stated in the README: the environment dials the suite and wins for
+  `PROPERTY_RUNS`/`PROPERTY_PHASES`/`PROPERTY_DERANDOMIZE`, while the attribute
+  pins the property and wins for `seed`/`path`. A `path` without a `seed` is
+  rejected by the attribute itself, so the error names the attribute rather
+  than the config built from it.
+- **Requires `rasuvaeff/property-testing-core` `^0.2`.** The knobs above are
+  0.2 engine fields; there is no version of this adapter that offers them
+  against core 0.1.
+
 ## 0.1.0 — 2026-08-09
 
 - Initial release: the Testo adapter extracted from `rasuvaeff/property-testing`

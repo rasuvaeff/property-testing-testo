@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\PropertyTesting;
 
+use Rasuvaeff\PropertyTesting\Runner\Phase;
+use Rasuvaeff\PropertyTesting\Runner\ShrinkMode;
 use Rasuvaeff\PropertyTesting\Testo\PropertyInterceptor;
 use Testo\Pipeline\Attribute\FallbackInterceptor;
 use Testo\Pipeline\Attribute\Interceptable;
@@ -47,6 +49,21 @@ final readonly class Property implements Interceptable
      * @param ?int $budgetMs Wall-clock budget for the whole random phase in milliseconds.
      *        When it runs out before {@see $runs} successful checks complete, the property
      *        fails with a {@see TimeBudgetExceededException}. Null (default) disables the budget.
+     * @param ?ShrinkMode $shrink How hard to minimise a counterexample: {@see ShrinkMode::Full}
+     *        (the default), {@see ShrinkMode::Off} to report the input as generated, or
+     *        {@see ShrinkMode::Bounded} together with $shrinkBudgetMs.
+     * @param ?int $shrinkBudgetMs Wall-clock budget for the shrink descent in milliseconds — the
+     *        one knob here that costs determinism, since how far the descent gets depends on how
+     *        long the body takes. It answers "the descent hung", not "reproduce this exactly".
+     * @param ?list<Phase> $phases Stages this property performs, in run order. Null (default) runs
+     *        all of them; a subset trades coverage for time on purpose.
+     * @param bool $derandomize Derives an unset seed from the property id instead of drawing one,
+     *        so the same property on the same code always selects the same inputs. An explicit
+     *        $seed still wins.
+     * @param ?string $path A recorded shrink descent (`CounterExample::$path`) followed instead of
+     *        searched for again. It needs the $seed of the run that produced it — the steps mean
+     *        nothing against another one — and it is a debugging aid, not a fixture: editing a
+     *        generator orphans it, which is what the regression corpus is for.
      */
     public function __construct(
         public int $runs = 100,
@@ -57,6 +74,11 @@ final readonly class Property implements Interceptable
         public ?int $maxDiscards = null,
         public ?int $timeoutMs = null,
         public ?int $budgetMs = null,
+        public ?ShrinkMode $shrink = null,
+        public ?int $shrinkBudgetMs = null,
+        public ?array $phases = null,
+        public bool $derandomize = false,
+        public ?string $path = null,
     ) {
         if ($runs < 1) {
             throw new \InvalidArgumentException('Runs must be greater than or equal to 1');
@@ -72,6 +94,15 @@ final readonly class Property implements Interceptable
         }
         if ($budgetMs !== null && $budgetMs < 1) {
             throw new \InvalidArgumentException('Budget must be greater than or equal to 1 millisecond');
+        }
+        if ($shrinkBudgetMs !== null && $shrinkBudgetMs < 1) {
+            throw new \InvalidArgumentException('Shrink budget must be greater than or equal to 1 millisecond');
+        }
+        if ($path !== null && $seed === null) {
+            // The engine says the same thing, but a property is compiled long
+            // before it runs: catching it here names the attribute that is
+            // wrong rather than the config built from it.
+            throw new \InvalidArgumentException('Path replay requires an explicit seed');
         }
     }
 }

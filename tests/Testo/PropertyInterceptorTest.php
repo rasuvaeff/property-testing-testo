@@ -11,6 +11,7 @@ use Rasuvaeff\PropertyTesting\Classify;
 use Rasuvaeff\PropertyTesting\CounterExample;
 use Rasuvaeff\PropertyTesting\CoverageViolationException;
 use Rasuvaeff\PropertyTesting\DeadlineExceededException;
+use Rasuvaeff\PropertyTesting\Event\PropertyStarted;
 use Rasuvaeff\PropertyTesting\ExampleViolationException;
 use Rasuvaeff\PropertyTesting\GaveUpException;
 use Rasuvaeff\PropertyTesting\Gen;
@@ -23,6 +24,7 @@ use Rasuvaeff\PropertyTesting\Runner\RegressionFailed;
 use Rasuvaeff\PropertyTesting\Runner\TimeBudgetExceeded;
 use Rasuvaeff\PropertyTesting\Testo\PropertyInterceptor;
 use Rasuvaeff\PropertyTesting\Testo\TestoTrialExecutor;
+use Rasuvaeff\PropertyTesting\Testo\Tests\Support\CollectingListener;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Support\Env;
 use Rasuvaeff\PropertyTesting\TimeBudgetExceededException;
 use Testo\Application\Internal\MessengerHub;
@@ -585,6 +587,217 @@ final class PropertyInterceptorTest
         } finally {
             $restoreEnv();
         }
+    }
+
+    public function shrinkOffReportsTheCounterexampleAsGenerated(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => $info->arguments[0] >= 100
+            ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('x>=100'))
+            : new TestResult(info: $info, status: Status::Passed);
+
+        $result = $interceptor->runTest($this->info(ShrinkOffStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+        $example = $result->failure->getCounterExample();
+        Assert::same($example->originalArguments, $example->shrunkArguments);
+        Assert::same($example->shrinkSteps, 0);
+    }
+
+    public function phasesWithoutRandomNeverReachTheGenerators(): void
+    {
+        // The property below would be falsified by the first random draw; with
+        // only Examples and Corpus in the list, that phase never happens.
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(
+            info: $info,
+            status: Status::Failed,
+            failure: new \RuntimeException('would fail on any input'),
+        );
+
+        $result = $interceptor->runTest($this->info(ExamplesAndCorpusOnlyStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    public function envPropertyPhasesOverridesTheAttribute(): void
+    {
+        // The environment dials the suite: a CI gate cuts the random phase out
+        // of a property that asks for it in its attribute.
+        $restoreEnv = Env::set('PROPERTY_PHASES', 'examples,corpus');
+
+        try {
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static fn(TestInfo $info): TestResult => new TestResult(
+                info: $info,
+                status: Status::Failed,
+                failure: new \RuntimeException('would fail on any input'),
+            );
+
+            $result = $interceptor->runTest($this->info(FalsifyingStub::class, 'check'), $next);
+
+            Assert::same($result->status, Status::Passed);
+        } finally {
+            $restoreEnv();
+        }
+    }
+
+    public function envPropertyPhasesIgnoresSpacingAndCase(): void
+    {
+        $restoreEnv = Env::set('PROPERTY_PHASES', ' Examples , CORPUS ');
+
+        try {
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static fn(TestInfo $info): TestResult => new TestResult(
+                info: $info,
+                status: Status::Failed,
+                failure: new \RuntimeException('would fail on any input'),
+            );
+
+            $result = $interceptor->runTest($this->info(FalsifyingStub::class, 'check'), $next);
+
+            Assert::same($result->status, Status::Passed);
+        } finally {
+            $restoreEnv();
+        }
+    }
+
+    public function envPropertyPhasesRejectsAnUnknownStage(): void
+    {
+        $restoreEnv = Env::set('PROPERTY_PHASES', 'examples,rundom');
+
+        try {
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+            $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+            Assert::fail('expected an InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            Assert::same(
+                $e->getMessage(),
+                'PROPERTY_PHASES must be a comma-separated list of examples, corpus, random, shrink, got "rundom"',
+            );
+        } finally {
+            $restoreEnv();
+        }
+    }
+
+    public function derandomizeMakesAnUnseededPropertyRepeatItself(): void
+    {
+        // The seed is what the knob decides, and PropertyStarted reports the
+        // one the engine ran with — comparing generated values would also pass
+        // for a generator that ignored its seed.
+        Assert::same(
+            $this->resolvedSeed(DerandomizedStub::class),
+            $this->resolvedSeed(DerandomizedStub::class),
+        );
+    }
+
+    public function withoutDerandomizeAnUnseededPropertyDrawsAFreshSeed(): void
+    {
+        // The other half: without the knob the two runs draw independent seeds,
+        // so the assertion above is about derandomization rather than a
+        // degenerate generator.
+        Assert::false($this->resolvedSeed(UnseededStub::class) === $this->resolvedSeed(UnseededStub::class));
+    }
+
+    public function envPropertyDerandomizeOverridesTheAttribute(): void
+    {
+        $restoreEnv = Env::set('PROPERTY_DERANDOMIZE', '1');
+
+        try {
+            Assert::same(
+                $this->resolvedSeed(UnseededStub::class),
+                $this->resolvedSeed(UnseededStub::class),
+            );
+        } finally {
+            $restoreEnv();
+        }
+    }
+
+    public function envPropertyDerandomizeZeroLeavesTheSuiteRandom(): void
+    {
+        $restoreEnv = Env::set('PROPERTY_DERANDOMIZE', '0');
+
+        try {
+            Assert::false(
+                $this->resolvedSeed(UnseededStub::class) === $this->resolvedSeed(UnseededStub::class),
+            );
+        } finally {
+            $restoreEnv();
+        }
+    }
+
+    public function envPropertyPathReplaysTheRecordedDescent(): void
+    {
+        $failing = static fn(TestInfo $info): TestResult => $info->arguments[0] >= 100
+            ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('x>=100'))
+            : new TestResult(info: $info, status: Status::Passed);
+
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $first = $interceptor->runTest($this->info(ShrinkPathStub::class, 'check'), $failing);
+        Assert::instanceOf($first->failure, PropertyViolationException::class);
+
+        $path = $first->failure->getCounterExample()->path;
+        Assert::false($path === '');
+
+        $restoreEnv = Env::set('PROPERTY_PATH', $path);
+
+        try {
+            $replayed = $interceptor->runTest($this->info(ShrinkPathStub::class, 'check'), $failing);
+
+            Assert::instanceOf($replayed->failure, PropertyViolationException::class);
+            Assert::same($replayed->failure->getCounterExample()->path, $path);
+            Assert::same(
+                $replayed->failure->getCounterExample()->shrunkArguments,
+                $first->failure->getCounterExample()->shrunkArguments,
+            );
+            // A path is followed, not searched for: one body execution per
+            // recorded step instead of one per candidate tried. The trial count
+            // is what fails if the variable is ignored, since a deterministic
+            // search reproduces the same path anyway.
+            Assert::true(
+                $replayed->failure->getCounterExample()->shrinkTrials
+                    < $first->failure->getCounterExample()->shrinkTrials,
+            );
+        } finally {
+            $restoreEnv();
+        }
+    }
+
+    public function shrinkBudgetIsAcceptedByTheEngine(): void
+    {
+        // Generous budget: this pins the wiring, not the timing.
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+        $result = $interceptor->runTest($this->info(ShrinkBudgetStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    /**
+     * The seed the engine ran $stub with, as PropertyStarted reports it — the
+     * one observable that says what a seed knob decided.
+     *
+     * @param class-string $stub
+     */
+    private function resolvedSeed(string $stub): int
+    {
+        $listener = new CollectingListener();
+        $interceptor = new PropertyInterceptor($this->createMessenger(), listeners: [$listener]);
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+        $interceptor->runTest($this->info($stub, 'check'), $next);
+
+        foreach ($listener->events as $event) {
+            if ($event instanceof PropertyStarted) {
+                return $event->seed;
+            }
+        }
+
+        Assert::fail('No PropertyStarted event was recorded');
     }
 
     #[ExpectException(\InvalidArgumentException::class)]

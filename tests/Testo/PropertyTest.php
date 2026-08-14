@@ -94,4 +94,34 @@ final class PropertyTest
     {
         new Property(maxDiscards: -1);
     }
+
+    public function acceptsAShrinkBudgetOfOneMillisecond(): void
+    {
+        Assert::same((new Property(shrinkBudgetMs: 1))->shrinkBudgetMs, 1);
+    }
+
+    #[ExpectException(\InvalidArgumentException::class)]
+    public function rejectsAShrinkBudgetBelowOneMillisecond(): void
+    {
+        new Property(shrinkBudgetMs: 0);
+    }
+
+    public function acceptsAPathBesideASeed(): void
+    {
+        Assert::same((new Property(seed: 7, path: 'x:1'))->path, 'x:1');
+    }
+
+    public function rejectsAPathWithoutASeed(): void
+    {
+        // The steps of a descent mean nothing against another run, so a path
+        // without the seed that produced it is a mistake worth naming at the
+        // attribute rather than in the config built from it.
+        try {
+            new Property(path: 'x:1');
+
+            Assert::fail('expected an InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            Assert::same($e->getMessage(), 'Path replay requires an explicit seed');
+        }
+    }
 }
