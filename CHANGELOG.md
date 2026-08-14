@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Requires `rasuvaeff/property-testing-core` `^0.2.1`: the falsification message
+  now ends with the shrink path, and this package's golden pins that message
+  whole again — the transitional tolerance that let core ship the line is gone.
+  Both READMEs say how to replay a descent with the path beside the seed.
+
 ## 0.2.0 — 2026-08-14
 
 - Added the 0.2 run knobs to `#[Property]` and to the environment: `shrink`

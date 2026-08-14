@@ -116,7 +116,12 @@ Property falsified after 246 successful run(s); seed=7382910
 ```
 
 Точный прогон воспроизводится передачей seed обратно в атрибут:
-`#[Property(runs: 500, seed: 7382910)]`.
+`#[Property(runs: 500, seed: 7382910)]`. Последняя строка сообщения — `Path:`,
+принятые шаги shrink; если передать и его рядом с seed
+(`#[Property(seed: 7382910, path: 'attempts:1/attempts:3')]` или
+`PROPERTY_SEED=… PROPERTY_PATH=…`), прогон пройдёт по спуску, а не будет искать
+его заново. Выдержка выше сокращена: реальный прогон печатает ещё `Failure:` и
+`Path:`.
 
 ### Конвенции
 
