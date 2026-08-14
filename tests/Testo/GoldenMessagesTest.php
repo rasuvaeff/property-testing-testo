@@ -66,8 +66,18 @@ final class GoldenMessagesTest
         $result = $this->interceptor()->runTest($this->info(FalsifyingStub::class, 'check'), $this->failAboveFifty());
 
         Assert::instanceOf($result->failure, PropertyViolationException::class);
+
+        // TRANSITIONAL, issue #4: core is adding a trailing "Path:" line to
+        // this message. Its contract-suite jobs run THIS branch against core's
+        // checkout and are required there, so the change cannot land while the
+        // golden pins the old text — and this repository cannot pin the new
+        // text before core releases it. Stripping an optional trailing path
+        // keeps every other character exact for one release; the golden is
+        // pinned whole again the moment core ships it.
+        $message = (string) preg_replace('/\n  Path:     [^\n]+\z/', '', $result->failure->getMessage());
+
         Assert::same(
-            $result->failure->getMessage(),
+            $message,
             "Property falsified after 0 successful run(s); seed=1\n"
                 . "  Original: x=100\n"
                 . "  Shrunk:   x=51 (1 shrink step(s), 1 trial(s))\n"
