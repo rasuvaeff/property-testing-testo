@@ -174,8 +174,9 @@ function.
 
 The flip side of string resolution: a misspelled method name that happens to
 match a global function (`'count'`, `'range'`) is invoked as that function —
-the result validation rejects what it returns, but the message will talk about
-the wrong callable. A typo matching nothing fails immediately with
+typically failing with its own `ArgumentCountError` from the zero-argument
+call, or, when the function takes no arguments, with the result validation
+rejecting its return. A typo matching nothing fails immediately with
 `neither a method on … nor a callable`.
 
 ### Attribute parameters

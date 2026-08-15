@@ -51,8 +51,8 @@ installation fails at resolution time.
 #[Property(
     runs: 100,             // successful checks to complete
     seed: null,            // pin the random phase; also disables corpus replay
-    generators: null,      // generators method name; default <testMethod>Generators
-    examples: null,        // examples method name; default <testMethod>Examples
+    generators: null,      // method name or callable; default <testMethod>Generators
+    examples: null,        // method name or callable; default <testMethod>Examples
     maxShrinks: null,      // cap accepted shrink steps; 0 disables shrinking
     maxDiscards: null,     // discard budget; default runs * 10
     timeoutMs: null,       // per-run wall-clock deadline -> DeadlineExceededException
