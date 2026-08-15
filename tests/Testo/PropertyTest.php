@@ -40,6 +40,40 @@ final class PropertyTest
         Assert::same($property->budgetMs, 5_000);
     }
 
+    public function retainsCallableProvidersAsClosures(): void
+    {
+        $generator = static fn(): array => [];
+        $example = static fn(): array => [];
+        $property = new Property(generators: $generator, examples: $example);
+
+        Assert::instanceOf($property->generators, \Closure::class);
+        Assert::instanceOf($property->examples, \Closure::class);
+        Assert::same($property->generators, $generator);
+        Assert::same($property->examples, $example);
+    }
+
+    public function convertsInvokableProvidersWithoutExecutingThem(): void
+    {
+        $calls = 0;
+        $provider = new class ($calls) {
+            public function __construct(private int &$calls) {}
+
+            public function __invoke(): array
+            {
+                ++$this->calls;
+
+                return [];
+            }
+        };
+
+        $property = new Property(generators: $provider);
+
+        Assert::instanceOf($property->generators, \Closure::class);
+        Assert::same($calls, 0);
+        ($property->generators)();
+        Assert::same($calls, 1);
+    }
+
     #[ExpectException(\InvalidArgumentException::class)]
     public function rejectsTimeoutBelowOneMillisecond(): void
     {

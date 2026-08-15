@@ -64,6 +64,91 @@ final class ConventionStub
     }
 }
 
+final class SharedCallableProvider
+{
+    /** @return array<string, ArbitraryInterface> */
+    public static function generators(): array
+    {
+        return ['x' => Gen::constant(value: 7)];
+    }
+
+    /** @return list<list<int>> */
+    public static function examples(): array
+    {
+        return [[7]];
+    }
+}
+
+final class InvokableCallableProvider
+{
+    /** @return array<string, ArbitraryInterface> */
+    public function __invoke(): array
+    {
+        return ['x' => Gen::constant(value: 8)];
+    }
+}
+
+final class InvokableExamplesProvider
+{
+    /** @return list<list<int>> */
+    public function __invoke(): array
+    {
+        return [[8]];
+    }
+}
+
+final class ArrayCallableStub
+{
+    #[Property(runs: 1, seed: 1, generators: [SharedCallableProvider::class, 'generators'])]
+    public function check(int $x): void {}
+}
+
+final class StringCallableStub
+{
+    #[Property(runs: 1, seed: 1, generators: SharedCallableProvider::class . '::generators')]
+    public function check(int $x): void {}
+}
+
+final class InvokableCallableStub
+{
+    #[Property(runs: 1, seed: 1, generators: new InvokableCallableProvider())]
+    public function check(int $x): void {}
+}
+
+final class CallableExamplesStub
+{
+    #[Property(
+        runs: 1,
+        seed: 1,
+        generators: new InvokableCallableProvider(),
+        examples: [SharedCallableProvider::class, 'examples'],
+    )]
+    public function check(int $x): void {}
+}
+
+final class InvokableCallableExamplesStub
+{
+    #[Property(
+        runs: 1,
+        seed: 1,
+        generators: new InvokableCallableProvider(),
+        examples: new InvokableExamplesProvider(),
+    )]
+    public function check(int $x): void {}
+}
+
+final class GlobalFunctionCollisionStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'range')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function range(): array
+    {
+        return ['x' => Gen::constant(value: 9)];
+    }
+}
+
 final class FalsifyingStub
 {
     #[Property(runs: 1, seed: 1, generators: 'provide')]

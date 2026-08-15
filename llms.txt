@@ -25,8 +25,14 @@ installation fails at resolution time.
 - Generators/examples methods must be `public static` (`public` if the body
   needs `$this`) — their only call site is reflection, and Rector's dead-code
   set deletes private ones.
-- Attribute arguments are constant expressions: generators can NOT be inline.
-  Default convention: `<testMethod>Generators` / `<testMethod>Examples`.
+- `generators` and `examples` accept a method name or callable. A string first
+  resolves to a method on the property class, then to an external callable;
+  non-string callables are stored as `Closure` and invoked during resolution.
+  Default convention remains `<testMethod>Generators` / `<testMethod>Examples`.
+- PHP 8.3+: reusable providers can be passed as
+  `[Provider::class, 'method']`, `'Provider::method'`, or an invokable object
+  (`new Provider()`). PHP 8.5 also allows an inline static closure and a
+  first-class callable (`Provider::method(...)`).
 - An attribute `seed` disables corpus replay for that property; the env
   `PROPERTY_SEED` does NOT (it only seeds properties whose attribute omits
   `seed`).

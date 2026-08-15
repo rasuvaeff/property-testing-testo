@@ -134,8 +134,8 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 // failure and yield to what the attribute wrote down.
                 phases: $this->resolvePhases($property->phases),
                 derandomize: $derandomize,
-                edgeCases: $this->resolveEdgeCases($property->edgeCases),
                 path: $property->path ?? $this->resolvePath(),
+                edgeCases: $this->resolveEdgeCases($property->edgeCases),
             ),
             examples: $this->resolveExamples($reflection, $info, $property),
             // A pinned attribute seed wins over the corpus: replaying recorded
@@ -358,10 +358,11 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
      */
     private function resolveGenerators(\ReflectionMethod $testMethod, TestInfo $info, Property $property): array
     {
-        $methodName = $property->generators ?? $testMethod->getName() . 'Generators';
+        $provider = $property->generators;
         $class = $testMethod->getDeclaringClass();
+        $methodName = $testMethod->getName() . 'Generators';
 
-        if (!$class->hasMethod($methodName)) {
+        if ($provider === null && !$class->hasMethod($methodName)) {
             throw new \InvalidArgumentException(sprintf(
                 'Property "%s" requires a generators method "%s" on %s returning array<string, ArbitraryInterface>',
                 $testMethod->getName(),
@@ -370,17 +371,16 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             ));
         }
 
-        $generatorMethod = $class->getMethod($methodName);
+        $provider ??= $methodName;
+        $providerLabel = \is_string($provider) ? $provider : '<callable>';
 
         /** @var mixed $generators */
-        $generators = $generatorMethod->isStatic()
-            ? $generatorMethod->getClosure()()
-            : $generatorMethod->getClosure($info->caseInfo->instance?->getInstance())();
+        $generators = $this->resolveProvider($testMethod, $info, $provider, 'generators')();
 
         if (!is_array($generators)) {
             throw new \InvalidArgumentException(sprintf(
                 'Generators method "%s" must return an array, got %s',
-                $methodName,
+                $providerLabel,
                 get_debug_type($generators),
             ));
         }
@@ -391,7 +391,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             if (!$generator instanceof ArbitraryInterface) {
                 throw new \InvalidArgumentException(sprintf(
                     'Generators method "%s" must return array<string, ArbitraryInterface>, got %s for key "%s"',
-                    $methodName,
+                    $providerLabel,
                     get_debug_type($generator),
                     (string) $name,
                 ));
@@ -411,33 +411,24 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
      */
     private function resolveExamples(\ReflectionMethod $testMethod, TestInfo $info, Property $property): array
     {
-        $methodName = $property->examples ?? $testMethod->getName() . 'Examples';
+        $provider = $property->examples;
         $class = $testMethod->getDeclaringClass();
+        $methodName = $testMethod->getName() . 'Examples';
 
-        if (!$class->hasMethod($methodName)) {
-            if ($property->examples !== null) {
-                throw new \InvalidArgumentException(sprintf(
-                    'Property "%s" references examples method "%s" which does not exist on %s',
-                    $testMethod->getName(),
-                    $methodName,
-                    $class->getName(),
-                ));
-            }
-
+        if ($provider === null && !$class->hasMethod($methodName)) {
             return [];
         }
 
-        $method = $class->getMethod($methodName);
+        $provider ??= $methodName;
+        $providerLabel = \is_string($provider) ? $provider : '<callable>';
 
         /** @var mixed $examples */
-        $examples = $method->isStatic()
-            ? $method->getClosure()()
-            : $method->getClosure($info->caseInfo->instance?->getInstance())();
+        $examples = $this->resolveProvider($testMethod, $info, $provider, 'examples')();
 
         if (!is_iterable($examples)) {
             throw new \InvalidArgumentException(sprintf(
                 'Examples method "%s" must return an iterable, got %s',
-                $methodName,
+                $providerLabel,
                 get_debug_type($examples),
             ));
         }
@@ -449,7 +440,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             if (!is_array($example)) {
                 throw new \InvalidArgumentException(sprintf(
                     'Examples method "%s" must yield arrays of positional arguments, got %s',
-                    $methodName,
+                    $providerLabel,
                     get_debug_type($example),
                 ));
             }
@@ -470,6 +461,38 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         }
 
         return $typed;
+    }
+
+    private function resolveProvider(
+        \ReflectionMethod $testMethod,
+        TestInfo $info,
+        \Closure|string $provider,
+        string $kind,
+    ): \Closure {
+        if ($provider instanceof \Closure) {
+            return $provider;
+        }
+
+        $class = $testMethod->getDeclaringClass();
+        if ($class->hasMethod($provider)) {
+            $method = $class->getMethod($provider);
+
+            return $method->isStatic()
+                ? $method->getClosure()
+                : $method->getClosure($info->caseInfo->instance?->getInstance());
+        }
+
+        if (is_callable($provider)) {
+            return \Closure::fromCallable($provider);
+        }
+
+        throw new \InvalidArgumentException(sprintf(
+            'Property "%s" references %s provider "%s" which is neither a method on %s nor a callable',
+            $testMethod->getName(),
+            $kind,
+            $provider,
+            $class->getName(),
+        ));
     }
 
     /**
