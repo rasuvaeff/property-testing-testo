@@ -72,6 +72,12 @@ final class PropertyTest
         Assert::same($calls, 0);
         ($property->generators)();
         Assert::same($calls, 1);
+
+        $examplesProperty = new Property(examples: $provider);
+
+        Assert::instanceOf($examplesProperty->examples, \Closure::class);
+        ($examplesProperty->examples)();
+        Assert::same($calls, 2);
     }
 
     #[ExpectException(\InvalidArgumentException::class)]
