@@ -56,6 +56,7 @@ installation fails at resolution time.
     phases: null,          // list<Phase>: Examples, Corpus, Random, Shrink; null = all
     derandomize: false,    // unset seed derived from the property id
     path: null,            // replay a recorded shrink descent; REQUIRES seed
+    edgeCases: EdgeCases::Mixin, // None = no numeric boundary bias
 )]
 ```
 
@@ -110,6 +111,7 @@ public static function additionCommutesExamples(): array
 | `PROPERTY_PHASES` | `examples,corpus,random,shrink` (comma-separated, case-insensitive) | Stages to run; OVERRIDES the attribute; unknown name throws |
 | `PROPERTY_DERANDOMIZE` | anything but `''`/`'0'` | Unset seeds derived from the property id; OVERRIDES the attribute; an attribute `seed` still wins |
 | `PROPERTY_PATH` | recorded `CounterExample::$path` | Replays that descent; needs the seed of that run; an attribute `path` wins |
+| `PROPERTY_EDGE_CASES` | `mixin` \| `none` (case-insensitive) | Numeric boundary bias; OVERRIDES the attribute; unknown value throws |
 
 ### Adapter classes (namespace `Rasuvaeff\PropertyTesting\Testo`)
 

@@ -7,6 +7,7 @@ namespace Rasuvaeff\PropertyTesting\Testo\Tests;
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Gen;
 use Rasuvaeff\PropertyTesting\Property;
+use Rasuvaeff\PropertyTesting\Runner\EdgeCases;
 use Rasuvaeff\PropertyTesting\Runner\Phase;
 use Rasuvaeff\PropertyTesting\Runner\ShrinkMode;
 
@@ -510,5 +511,29 @@ final class ShrinkPathStub
     public static function provide(): array
     {
         return ['x' => Gen::intBetween(0, 10_000)];
+    }
+}
+
+final class NoEdgeCasesStub
+{
+    #[Property(runs: 200, seed: 5, generators: 'provide', edgeCases: EdgeCases::None)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(-1_000_000, 1_000_000)];
+    }
+}
+
+final class EdgeCasesStub
+{
+    #[Property(runs: 200, seed: 5, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(-1_000_000, 1_000_000)];
     }
 }

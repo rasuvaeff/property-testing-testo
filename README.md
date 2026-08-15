@@ -155,6 +155,7 @@ Rector's dead-code set would delete private ones.
 | `phases` | Stages to perform (`Phase::Examples`, `Corpus`, `Random`, `Shrink`); a subset trades coverage for time on purpose |
 | `derandomize` | Derives an unset seed from the property id instead of drawing one; an attribute `seed` still wins |
 | `path` | Replays a recorded shrink descent (`CounterExample::$path`) instead of searching for it; requires `seed` |
+| `edgeCases` | `EdgeCases::None` turns off the numeric boundary bias — for a property the edges only cost runs |
 
 ### Environment overrides
 
@@ -173,6 +174,7 @@ what the attribute wrote down.
 | `PROPERTY_PHASES` | Comma-separated stage list (`examples,corpus,random,shrink`, case-insensitive) that overrides the attribute — an unknown name throws rather than skipping a stage. `examples,corpus` is the fast pull-request gate |
 | `PROPERTY_DERANDOMIZE` | Any value except `''`/`'0'` derives every unset seed from the property id, making a whole suite reproducible without editing it |
 | `PROPERTY_PATH` | A recorded shrink descent replayed instead of searched for. Needs the seed that produced it; an attribute `path` wins |
+| `PROPERTY_EDGE_CASES` | `mixin` or `none` (case-insensitive) — the numeric boundary bias for the whole suite, overriding the attribute. An unknown value throws |
 
 ### Regression corpus
 

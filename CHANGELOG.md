@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Added `edgeCases` to `#[Property]` and `PROPERTY_EDGE_CASES` (`mixin` or
+  `none`) to the environment, reaching core 0.3's switch for the numeric
+  boundary bias. Turning it off stops a property that cannot use `0`, `±1` or a
+  range's ends from spending one run in five on a value it discards. The
+  variable overrides the attribute, like every other CI-facing knob, and an
+  unknown value throws rather than silently keeping the bias it was told to
+  drop.
+- **Requires `rasuvaeff/property-testing-core` `^0.3`.**
+
+## Unreleased
+
 - Requires `rasuvaeff/property-testing-core` `^0.2.1`: the falsification message
   now ends with the shrink path, and this package's golden pins that message
   whole again — the transitional tolerance that let core ship the line is gone.

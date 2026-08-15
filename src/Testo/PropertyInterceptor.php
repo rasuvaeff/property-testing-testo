@@ -9,6 +9,7 @@ use Rasuvaeff\PropertyTesting\Property;
 use Rasuvaeff\PropertyTesting\PropertyListener;
 use Rasuvaeff\PropertyTesting\Runner\Clock;
 use Rasuvaeff\PropertyTesting\Runner\CoverageFailed;
+use Rasuvaeff\PropertyTesting\Runner\EdgeCases;
 use Rasuvaeff\PropertyTesting\Runner\FilesystemCorpus;
 use Rasuvaeff\PropertyTesting\Runner\GaveUp;
 use Rasuvaeff\PropertyTesting\Runner\Passed;
@@ -134,6 +135,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 // failure and yield to what the attribute wrote down.
                 phases: $this->resolvePhases($property->phases),
                 derandomize: $derandomize,
+                edgeCases: $this->resolveEdgeCases($property->edgeCases),
                 path: $property->path ?? $this->resolvePath(),
             ),
             examples: $this->resolveExamples($reflection, $info, $property),
@@ -252,6 +254,32 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         }
 
         return $phases;
+    }
+
+    /**
+     * `PROPERTY_EDGE_CASES` selects the numeric boundary bias for the whole
+     * suite: `mixin` (the default) or `none`, case-insensitive. It overrides
+     * the attribute, like every other CI-facing knob, and an unknown value is
+     * an error rather than a silent fallback — a suite that quietly kept the
+     * bias it was told to drop would spend the discard budget it was trying to
+     * save.
+     */
+    private function resolveEdgeCases(EdgeCases $attributeEdgeCases): EdgeCases
+    {
+        $env = getenv('PROPERTY_EDGE_CASES');
+
+        if ($env === false || $env === '') {
+            return $attributeEdgeCases;
+        }
+
+        return match (strtolower(trim($env))) {
+            'mixin' => EdgeCases::Mixin,
+            'none' => EdgeCases::None,
+            default => throw new \InvalidArgumentException(sprintf(
+                'PROPERTY_EDGE_CASES must be one of mixin, none, got "%s"',
+                trim($env),
+            )),
+        };
     }
 
     /**
