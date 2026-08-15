@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-08-15
 
 - Added `edgeCases` to `#[Property]` and `PROPERTY_EDGE_CASES` (`mixin` or
   `none`) to the environment, reaching core 0.3's switch for the numeric
