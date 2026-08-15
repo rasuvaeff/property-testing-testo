@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Rasuvaeff\PropertyTesting\Testo\Tests;
 
 use Rasuvaeff\PropertyTesting\Runner\FilesystemCorpus;
+use Rasuvaeff\PropertyTesting\Runner\Redis\PredisCorpusClient;
 use Rasuvaeff\PropertyTesting\Runner\RedisCorpus;
 use Rasuvaeff\PropertyTesting\Testo\CorpusFromEnv;
+use Rasuvaeff\PropertyTesting\Testo\LazyPhpRedisCorpusClient;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Support\Env;
 use Testo\Assert;
 use Testo\Codecov\Covers;
@@ -54,6 +56,44 @@ final class CorpusFromEnvTest
 
         try {
             Assert::instanceOf(CorpusFromEnv::resolve(), FilesystemCorpus::class);
+        } finally {
+            $restore();
+        }
+    }
+
+    public function resolvingADsnNeverOpensASocket(): void
+    {
+        // The reason the phpredis client is wrapped: CI installs ext-redis and
+        // runs no Redis, and an eager connect() made every job red. Nothing
+        // here is running a server either — that this returns at all is the
+        // assertion.
+        $restore = Env::set('PROPERTY_DB', 'redis://127.0.0.1:6399/never-touched:');
+
+        try {
+            Assert::instanceOf(CorpusFromEnv::resolve(), RedisCorpus::class);
+        } finally {
+            $restore();
+        }
+    }
+
+    public function extRedisIsPreferredWhenItIsLoaded(): void
+    {
+        // The documented preference, asserted in whichever environment this
+        // runs: the extension needs no autoloaded dependency, so it wins when
+        // present, and predis is the fallback. CI has the extension; the
+        // composer image does not, and both must be right.
+        $restore = Env::set('PROPERTY_DB', 'redis://127.0.0.1:6399');
+
+        try {
+            $corpus = CorpusFromEnv::resolve();
+            Assert::instanceOf($corpus, RedisCorpus::class);
+
+            $client = (new \ReflectionProperty($corpus, 'client'))->getValue($corpus);
+
+            Assert::instanceOf(
+                $client,
+                extension_loaded('redis') ? LazyPhpRedisCorpusClient::class : PredisCorpusClient::class,
+            );
         } finally {
             $restore();
         }

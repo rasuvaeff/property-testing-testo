@@ -7,7 +7,6 @@ namespace Rasuvaeff\PropertyTesting\Testo;
 use Rasuvaeff\PropertyTesting\Runner\Corpus;
 use Rasuvaeff\PropertyTesting\Runner\FilesystemCorpus;
 use Rasuvaeff\PropertyTesting\Runner\Redis\CorpusClient;
-use Rasuvaeff\PropertyTesting\Runner\Redis\PhpRedisCorpusClient;
 use Rasuvaeff\PropertyTesting\Runner\Redis\PredisCorpusClient;
 use Rasuvaeff\PropertyTesting\Runner\RedisCorpus;
 
@@ -69,10 +68,9 @@ final class CorpusFromEnv
     private static function client(RedisDsn $dsn, string $raw): CorpusClient
     {
         if (extension_loaded('redis')) {
-            $redis = new \Redis();
-            $redis->connect($dsn->host, $dsn->port);
-
-            return new PhpRedisCorpusClient($redis);
+            // Lazily: resolving PROPERTY_DB must not open a socket, or a suite
+            // that names a corpus it never touches fails at startup.
+            return new LazyPhpRedisCorpusClient($dsn);
         }
 
         if (class_exists(\Predis\Client::class)) {
