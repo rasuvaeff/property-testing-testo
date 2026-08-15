@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-08-15
 
 - `PROPERTY_DB` now also takes a `redis://host[:port][/key-prefix]` DSN, which
   builds core 0.3's `RedisCorpus`. Until now that class existed and no suite
@@ -20,14 +20,11 @@
   variable overrides the attribute, like every other CI-facing knob, and an
   unknown value throws rather than silently keeping the bias it was told to
   drop.
+- The falsification message ends with the shrink path, and this package's
+  golden pins that message whole again — the transitional tolerance that let
+  core ship the line is gone. Both READMEs say how to replay a descent with
+  the path beside the seed.
 - **Requires `rasuvaeff/property-testing-core` `^0.3`.**
-
-## Unreleased
-
-- Requires `rasuvaeff/property-testing-core` `^0.2.1`: the falsification message
-  now ends with the shrink path, and this package's golden pins that message
-  whole again — the transitional tolerance that let core ship the line is gone.
-  Both READMEs say how to replay a descent with the path beside the seed.
 
 ## 0.2.0 — 2026-08-14
 
