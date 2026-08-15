@@ -219,23 +219,49 @@ jobs:
         run: composer install --no-interaction --no-progress --prefer-dist
 
       - name: Backward compatibility check
-        # BC breaks are allowed only when the CHANGELOG's top entry declares a
-        # higher major than the latest tag (an intentional major release);
-        # anything else fails the job.
+        # Real breaks pass only across an intended major bump: the top
+        # version heading in CHANGELOG.md declares a higher major than the
+        # latest tag. Minor/patch releases stay gated on a clean report.
+        #
+        # A report made up ENTIRELY of "[BC] SKIPPED: ..." lines is also a
+        # pass: SKIPPED means roave/better-reflection could not statically
+        # parse a construct (observed for enum-case and `new Expr()` default
+        # values in promoted constructor properties) - it is not a detected
+        # break. Once a class contains this pattern, EVERY future run reports
+        # the identical SKIPPED finding against ANY --from tag, including a
+        # diff against itself, so gating on it would permanently block every
+        # subsequent PR regardless of content. A single genuine
+        # "[BC] CHANGED:"/"[BC] REMOVED:"/"[BC] ADDED:" line anywhere in the
+        # report still fails the build.
         run: |
           LATEST="$(git describe --tags --abbrev=0 2>/dev/null || true)"
           if [ -z "$LATEST" ]; then
             echo "No previous tag - skipping BC check"
             exit 0
           fi
-          if composer bc-check -- --from="$LATEST"; then
+          CODE=0
+          OUTPUT="$(composer bc-check -- --from="$LATEST" --install-development-dependencies 2>&1)" || CODE=$?
+          printf '%s\n' "$OUTPUT"
+          if [ "$CODE" -eq 0 ]; then
             exit 0
           fi
-          LATEST_MAJOR="${LATEST#v}"
-          LATEST_MAJOR="${LATEST_MAJOR%%.*}"
-          NEXT_MAJOR="$(sed -n 's/^## \([0-9][0-9]*\)\..*/\1/p' CHANGELOG.md | head -n 1)"
-          if [ -n "$NEXT_MAJOR" ] && [ "$NEXT_MAJOR" -gt "$LATEST_MAJOR" ]; then
-            echo "BC breaks expected: CHANGELOG declares ${NEXT_MAJOR}.x, latest tag is ${LATEST}"
+          NEXT="$(grep -m1 -oE '## [0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+          LATEST_MAJOR="${LATEST#v}"; LATEST_MAJOR="${LATEST_MAJOR%%.*}"
+          NEXT_MAJOR="${NEXT%%.*}"
+          # Only code 3 means "breaks detected". Anything else is roave itself
+          # failing (128 when it cannot clone or resolve the old tag), and a
+          # crash must never be waved through by a CHANGELOG heading or a
+          # SKIPPED-only report.
+          if [ "$CODE" -eq 3 ] && [ -n "$NEXT_MAJOR" ] && [ "$NEXT_MAJOR" -gt "$LATEST_MAJOR" ]; then
+            echo "CHANGELOG declares $NEXT - a new major over $LATEST; BC breaks are expected, treating as pass."
             exit 0
           fi
-          exit 1
+          if [ "$CODE" -eq 3 ]; then
+            TOTAL="$(printf '%s\n' "$OUTPUT" | { grep -cE '^\[BC\] ' || true; })"
+            SKIPPED="$(printf '%s\n' "$OUTPUT" | { grep -cE '^\[BC\] SKIPPED:' || true; })"
+            if [ "$TOTAL" -gt 0 ] && [ "$TOTAL" -eq "$SKIPPED" ]; then
+              echo "All $TOTAL finding(s) are roave/better-reflection SKIPPED entries (a static-analysis limitation, not a detected break); treating as pass."
+              exit 0
+            fi
+          fi
+          exit "$CODE"

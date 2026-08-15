@@ -10,7 +10,6 @@ use Rasuvaeff\PropertyTesting\PropertyListener;
 use Rasuvaeff\PropertyTesting\Runner\Clock;
 use Rasuvaeff\PropertyTesting\Runner\CoverageFailed;
 use Rasuvaeff\PropertyTesting\Runner\EdgeCases;
-use Rasuvaeff\PropertyTesting\Runner\FilesystemCorpus;
 use Rasuvaeff\PropertyTesting\Runner\GaveUp;
 use Rasuvaeff\PropertyTesting\Runner\Passed;
 use Rasuvaeff\PropertyTesting\Runner\Phase;
@@ -151,7 +150,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
 
         $executor = new TestoTrialExecutor($info, \Closure::fromCallable($next));
 
-        $result = $this->runner->run($definition, $executor, $listeners, FilesystemCorpus::fromEnv());
+        $result = $this->runner->run($definition, $executor, $listeners, CorpusFromEnv::resolve());
 
         return $this->mapResult($info, $result, $executor->attributes());
     }
