@@ -175,6 +175,58 @@ final class PropertyInterceptorTest
         Assert::same($result->status, Status::Passed);
     }
 
+    public function localExamplesMethodWinsOverGlobalFunction(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $seen = [];
+        $next = static function (TestInfo $info) use (&$seen): TestResult {
+            $seen[] = $info->arguments[0];
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(ExamplesGlobalFunctionCollisionStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+        Assert::same($seen, [41, 8]);
+    }
+
+    public function throwsWhenGeneratorsStringIsNeitherMethodNorCallable(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+        try {
+            $interceptor->runTest($this->info(MissingCallableGeneratorsStub::class, 'check'), $next);
+        } catch (\InvalidArgumentException $exception) {
+            Assert::string($exception->getMessage())
+                ->contains('generators provider "definitelyNotACallable123"')
+                ->contains('neither a method on');
+
+            return;
+        }
+
+        Assert::fail('Expected an InvalidArgumentException for an unresolvable generators provider');
+    }
+
+    public function throwsWhenExamplesStringIsNeitherMethodNorCallable(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+        try {
+            $interceptor->runTest($this->info(MissingCallableExamplesStub::class, 'check'), $next);
+        } catch (\InvalidArgumentException $exception) {
+            Assert::string($exception->getMessage())
+                ->contains('examples provider "definitelyNotACallable123"')
+                ->contains('neither a method on');
+
+            return;
+        }
+
+        Assert::fail('Expected an InvalidArgumentException for an unresolvable examples provider');
+    }
+
     public function falsifiesAndShrinksToMinimalCounterexample(): void
     {
         $interceptor = new PropertyInterceptor($this->createMessenger());

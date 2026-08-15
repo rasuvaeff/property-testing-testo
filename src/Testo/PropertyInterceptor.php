@@ -134,8 +134,8 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 // failure and yield to what the attribute wrote down.
                 phases: $this->resolvePhases($property->phases),
                 derandomize: $derandomize,
-                path: $property->path ?? $this->resolvePath(),
                 edgeCases: $this->resolveEdgeCases($property->edgeCases),
+                path: $property->path ?? $this->resolvePath(),
             ),
             examples: $this->resolveExamples($reflection, $info, $property),
             // A pinned attribute seed wins over the corpus: replaying recorded
@@ -372,14 +372,14 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         }
 
         $provider ??= $methodName;
-        $providerLabel = \is_string($provider) ? $provider : '<callable>';
+        $providerLabel = \is_string($provider) ? sprintf('method "%s"', $provider) : 'callable provider';
 
         /** @var mixed $generators */
         $generators = $this->resolveProvider($testMethod, $info, $provider, 'generators')();
 
         if (!is_array($generators)) {
             throw new \InvalidArgumentException(sprintf(
-                'Generators method "%s" must return an array, got %s',
+                'Generators %s must return an array, got %s',
                 $providerLabel,
                 get_debug_type($generators),
             ));
@@ -390,7 +390,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         foreach ($generators as $name => $generator) {
             if (!$generator instanceof ArbitraryInterface) {
                 throw new \InvalidArgumentException(sprintf(
-                    'Generators method "%s" must return array<string, ArbitraryInterface>, got %s for key "%s"',
+                    'Generators %s must return array<string, ArbitraryInterface>, got %s for key "%s"',
                     $providerLabel,
                     get_debug_type($generator),
                     (string) $name,
@@ -420,14 +420,14 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         }
 
         $provider ??= $methodName;
-        $providerLabel = \is_string($provider) ? $provider : '<callable>';
+        $providerLabel = \is_string($provider) ? sprintf('method "%s"', $provider) : 'callable provider';
 
         /** @var mixed $examples */
         $examples = $this->resolveProvider($testMethod, $info, $provider, 'examples')();
 
         if (!is_iterable($examples)) {
             throw new \InvalidArgumentException(sprintf(
-                'Examples method "%s" must return an iterable, got %s',
+                'Examples %s must return an iterable, got %s',
                 $providerLabel,
                 get_debug_type($examples),
             ));
@@ -439,7 +439,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         foreach ($examples as $example) {
             if (!is_array($example)) {
                 throw new \InvalidArgumentException(sprintf(
-                    'Examples method "%s" must yield arrays of positional arguments, got %s',
+                    'Examples %s must yield arrays of positional arguments, got %s',
                     $providerLabel,
                     get_debug_type($example),
                 ));

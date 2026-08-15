@@ -80,6 +80,14 @@ final class PropertyTest
         Assert::same($calls, 2);
     }
 
+    #[ExpectException(\TypeError::class)]
+    public function rejectsNonCallableArrayProviderAtAttributeInstantiation(): void
+    {
+        $method = new \ReflectionMethod(NonCallableArrayProviderStub::class, 'check');
+
+        $method->getAttributes(Property::class)[0]->newInstance();
+    }
+
     #[ExpectException(\InvalidArgumentException::class)]
     public function rejectsTimeoutBelowOneMillisecond(): void
     {

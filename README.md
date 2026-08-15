@@ -172,6 +172,12 @@ such as `Provider::method(...)` in the attribute. A method on the test class
 named like a global function (for example `range`) still wins over that global
 function.
 
+The flip side of string resolution: a misspelled method name that happens to
+match a global function (`'count'`, `'range'`) is invoked as that function —
+the result validation rejects what it returns, but the message will talk about
+the wrong callable. A typo matching nothing fails immediately with
+`neither a method on … nor a callable`.
+
 ### Attribute parameters
 
 | Parameter | Meaning |

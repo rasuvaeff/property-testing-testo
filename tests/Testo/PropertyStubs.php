@@ -149,6 +149,46 @@ final class GlobalFunctionCollisionStub
     }
 }
 
+final class ExamplesGlobalFunctionCollisionStub
+{
+    #[Property(
+        runs: 1,
+        seed: 1,
+        generators: new InvokableCallableProvider(),
+        examples: 'compact',
+    )]
+    public function check(int $x): void {}
+
+    /** @return list<list<int>> */
+    public static function compact(): array
+    {
+        return [[41]];
+    }
+}
+
+final class MissingCallableGeneratorsStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'definitelyNotACallable123')]
+    public function check(int $x): void {}
+}
+
+final class MissingCallableExamplesStub
+{
+    #[Property(
+        runs: 1,
+        seed: 1,
+        generators: new InvokableCallableProvider(),
+        examples: 'definitelyNotACallable123',
+    )]
+    public function check(int $x): void {}
+}
+
+final class NonCallableArrayProviderStub
+{
+    #[Property(runs: 1, seed: 1, generators: [SharedCallableProvider::class, 'missingMethod'])]
+    public function check(int $x): void {}
+}
+
 final class FalsifyingStub
 {
     #[Property(runs: 1, seed: 1, generators: 'provide')]
