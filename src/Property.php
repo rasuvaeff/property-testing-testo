@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\PropertyTesting;
 
+use Rasuvaeff\PropertyTesting\Runner\EdgeCases;
 use Rasuvaeff\PropertyTesting\Runner\Phase;
 use Rasuvaeff\PropertyTesting\Runner\ShrinkMode;
 use Rasuvaeff\PropertyTesting\Testo\PropertyInterceptor;
@@ -60,6 +61,11 @@ final readonly class Property implements Interceptable
      * @param bool $derandomize Derives an unset seed from the property id instead of drawing one,
      *        so the same property on the same code always selects the same inputs. An explicit
      *        $seed still wins.
+     * @param EdgeCases $edgeCases Whether the numeric generators keep biasing toward their boundary
+     *        values ({@see EdgeCases::Mixin}, the default) or generate uniformly
+     *        ({@see EdgeCases::None}). Turn them off when the edges are what this property cannot
+     *        use — a body discarding `0`, a range end that violates a precondition — so the discard
+     *        budget stops paying for one run in five.
      * @param ?string $path A recorded shrink descent (`CounterExample::$path`) followed instead of
      *        searched for again. It needs the $seed of the run that produced it — the steps mean
      *        nothing against another one — and it is a debugging aid, not a fixture: editing a
@@ -79,6 +85,10 @@ final readonly class Property implements Interceptable
         public ?array $phases = null,
         public bool $derandomize = false,
         public ?string $path = null,
+        // Last on purpose: a parameter added anywhere else moves the ones after
+        // it, and every attribute passing them positionally would silently
+        // mean something else.
+        public EdgeCases $edgeCases = EdgeCases::Mixin,
     ) {
         if ($runs < 1) {
             throw new \InvalidArgumentException('Runs must be greater than or equal to 1');

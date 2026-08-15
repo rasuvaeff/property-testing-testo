@@ -12,6 +12,7 @@ use Rasuvaeff\PropertyTesting\CounterExample;
 use Rasuvaeff\PropertyTesting\CoverageViolationException;
 use Rasuvaeff\PropertyTesting\DeadlineExceededException;
 use Rasuvaeff\PropertyTesting\Event\PropertyStarted;
+use Rasuvaeff\PropertyTesting\Event\RunStarted;
 use Rasuvaeff\PropertyTesting\ExampleViolationException;
 use Rasuvaeff\PropertyTesting\GaveUpException;
 use Rasuvaeff\PropertyTesting\Gen;
@@ -775,6 +776,93 @@ final class PropertyInterceptorTest
         $result = $interceptor->runTest($this->info(ShrinkBudgetStub::class, 'check'), $next);
 
         Assert::same($result->status, Status::Passed);
+    }
+
+    public function edgeCasesOffKeepsBoundaryValuesOutOfTheRun(): void
+    {
+        // The knob's whole purpose: a property that cannot use the edges would
+        // otherwise throw away one run in five.
+        Assert::same($this->edgesSeen(NoEdgeCasesStub::class), 0);
+    }
+
+    public function byDefaultTheBoundaryValuesAreStillGenerated(): void
+    {
+        Assert::true($this->edgesSeen(EdgeCasesStub::class) > 10);
+    }
+
+    public function envPropertyEdgeCasesOverridesTheAttribute(): void
+    {
+        $restoreEnv = Env::set('PROPERTY_EDGE_CASES', 'none');
+
+        try {
+            Assert::same($this->edgesSeen(EdgeCasesStub::class), 0);
+        } finally {
+            $restoreEnv();
+        }
+    }
+
+    public function envPropertyEdgeCasesIgnoresSpacingAndCase(): void
+    {
+        $restoreEnv = Env::set('PROPERTY_EDGE_CASES', '  NONE  ');
+
+        try {
+            Assert::same($this->edgesSeen(EdgeCasesStub::class), 0);
+        } finally {
+            $restoreEnv();
+        }
+    }
+
+    public function envPropertyEdgeCasesCanTurnThemBackOn(): void
+    {
+        $restoreEnv = Env::set('PROPERTY_EDGE_CASES', 'mixin');
+
+        try {
+            Assert::true($this->edgesSeen(NoEdgeCasesStub::class) > 10);
+        } finally {
+            $restoreEnv();
+        }
+    }
+
+    public function envPropertyEdgeCasesRejectsAnUnknownValue(): void
+    {
+        $restoreEnv = Env::set('PROPERTY_EDGE_CASES', 'sometimes');
+
+        try {
+            $interceptor = new PropertyInterceptor($this->createMessenger());
+            $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+            $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+            Assert::fail('expected an InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            Assert::same($e->getMessage(), 'PROPERTY_EDGE_CASES must be one of mixin, none, got "sometimes"');
+        } finally {
+            $restoreEnv();
+        }
+    }
+
+    /**
+     * How many of $stub's runs generated an in-range boundary value.
+     *
+     * @param class-string $stub
+     */
+    private function edgesSeen(string $stub): int
+    {
+        $listener = new CollectingListener();
+        $interceptor = new PropertyInterceptor($this->createMessenger(), listeners: [$listener]);
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+        $interceptor->runTest($this->info($stub, 'check'), $next);
+
+        $edges = 0;
+
+        foreach ($listener->events as $event) {
+            if ($event instanceof RunStarted && in_array($event->arguments['x'] ?? null, [0, 1, -1, -1_000_000, 1_000_000], strict: true)) {
+                ++$edges;
+            }
+        }
+
+        return $edges;
     }
 
     /**
