@@ -45,7 +45,7 @@ jobs:
           fi
 
           if git diff --quiet "$BASE" "$GITHUB_SHA" -- \
-            src tests config examples composer.json testo.php psalm.xml \
+            src tests tests-php85 config examples composer.json testo.php psalm.xml \
             rector.php .php-cs-fixer.php infection.json5 \
             .github/workflows/build.yml; then
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -219,9 +219,10 @@ jobs:
         run: composer install --no-interaction --no-progress --prefer-dist
 
       - name: Backward compatibility check
-        # Real breaks pass only across an intended major bump: the top
-        # version heading in CHANGELOG.md declares a higher major than the
-        # latest tag. Minor/patch releases stay gated on a clean report.
+        # Real breaks pass only across an intentional compatibility boundary:
+        # a higher major after 1.0, or a higher minor while the package is
+        # still below 1.0. The top version heading in CHANGELOG.md declares
+        # that boundary; patch releases stay gated on a clean report.
         #
         # A report made up ENTIRELY of "[BC] SKIPPED: ..." lines is also a
         # pass: SKIPPED means roave/better-reflection could not statically
@@ -246,14 +247,20 @@ jobs:
             exit 0
           fi
           NEXT="$(grep -m1 -oE '## [0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
-          LATEST_MAJOR="${LATEST#v}"; LATEST_MAJOR="${LATEST_MAJOR%%.*}"
+          LATEST_VERSION="${LATEST#v}"
+          LATEST_MAJOR="${LATEST_VERSION%%.*}"
+          LATEST_MINOR="${LATEST_VERSION#*.}"; LATEST_MINOR="${LATEST_MINOR%%.*}"
           NEXT_MAJOR="${NEXT%%.*}"
+          NEXT_MINOR="${NEXT#*.}"; NEXT_MINOR="${NEXT_MINOR%%.*}"
           # Only code 3 means "breaks detected". Anything else is roave itself
           # failing (128 when it cannot clone or resolve the old tag), and a
           # crash must never be waved through by a CHANGELOG heading or a
           # SKIPPED-only report.
-          if [ "$CODE" -eq 3 ] && [ -n "$NEXT_MAJOR" ] && [ "$NEXT_MAJOR" -gt "$LATEST_MAJOR" ]; then
-            echo "CHANGELOG declares $NEXT - a new major over $LATEST; BC breaks are expected, treating as pass."
+          if [ "$CODE" -eq 3 ] && [ -n "$NEXT_MAJOR" ] && {
+            [ "$NEXT_MAJOR" -gt "$LATEST_MAJOR" ] ||
+            { [ "$LATEST_MAJOR" -eq 0 ] && [ "$NEXT_MAJOR" -eq 0 ] && [ "$NEXT_MINOR" -gt "$LATEST_MINOR" ]; }
+          }; then
+            echo "CHANGELOG declares $NEXT - an intentional compatibility boundary over $LATEST; BC breaks are expected, treating as pass."
             exit 0
           fi
           if [ "$CODE" -eq 3 ]; then

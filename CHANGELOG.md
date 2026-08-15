@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 — 2026-08-15
+
+- `#[Property]` `generators` and `examples` now accept reusable callable
+  providers: array callables, `Class::method` strings, invokable objects, and
+  (on PHP 8.5) inline closures and first-class callables. Local provider
+  methods keep precedence over global function names, and the existing
+  convention remains the default.
+- The public provider properties now expose `Closure|string|null` so callable
+  providers can be retained without executing them while the attribute is
+  constructed.
+
 ## 0.4.0 — 2026-08-15
 
 - `PROPERTY_DB` now also takes a `redis://host[:port][/key-prefix]` DSN, which

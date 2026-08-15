@@ -87,6 +87,146 @@ final class PropertyInterceptorTest
         Assert::same($calls, 3);
     }
 
+    public function resolvesAnArrayCallableProvider(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static function (TestInfo $info): TestResult {
+            Assert::same($info->arguments[0], 7);
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(ArrayCallableStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    public function resolvesAStringCallableProvider(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static function (TestInfo $info): TestResult {
+            Assert::same($info->arguments[0], 7);
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(StringCallableStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    public function resolvesAnInvokableProvider(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static function (TestInfo $info): TestResult {
+            Assert::same($info->arguments[0], 8);
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(InvokableCallableStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    public function resolvesCallableExamplesBeforeRandomRuns(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $seen = [];
+        $next = static function (TestInfo $info) use (&$seen): TestResult {
+            $seen[] = $info->arguments[0];
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(CallableExamplesStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+        Assert::same($seen, [7, 8]);
+    }
+
+    public function resolvesInvokableExamplesBeforeRandomRuns(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $seen = [];
+        $next = static function (TestInfo $info) use (&$seen): TestResult {
+            $seen[] = $info->arguments[0];
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(InvokableCallableExamplesStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+        Assert::same($seen, [8, 8]);
+    }
+
+    public function localGeneratorMethodWinsOverGlobalFunction(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static function (TestInfo $info): TestResult {
+            Assert::same($info->arguments[0], 9);
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(GlobalFunctionCollisionStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    public function localExamplesMethodWinsOverGlobalFunction(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $seen = [];
+        $next = static function (TestInfo $info) use (&$seen): TestResult {
+            $seen[] = $info->arguments[0];
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(ExamplesGlobalFunctionCollisionStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+        Assert::same($seen, [41, 8]);
+    }
+
+    public function throwsWhenGeneratorsStringIsNeitherMethodNorCallable(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+        try {
+            $interceptor->runTest($this->info(MissingCallableGeneratorsStub::class, 'check'), $next);
+        } catch (\InvalidArgumentException $exception) {
+            Assert::string($exception->getMessage())
+                ->contains('generators provider "definitelyNotACallable123"')
+                ->contains('neither a method on');
+
+            return;
+        }
+
+        Assert::fail('Expected an InvalidArgumentException for an unresolvable generators provider');
+    }
+
+    public function throwsWhenExamplesStringIsNeitherMethodNorCallable(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+        try {
+            $interceptor->runTest($this->info(MissingCallableExamplesStub::class, 'check'), $next);
+        } catch (\InvalidArgumentException $exception) {
+            Assert::string($exception->getMessage())
+                ->contains('examples provider "definitelyNotACallable123"')
+                ->contains('neither a method on');
+
+            return;
+        }
+
+        Assert::fail('Expected an InvalidArgumentException for an unresolvable examples provider');
+    }
+
     public function falsifiesAndShrinksToMinimalCounterexample(): void
     {
         $interceptor = new PropertyInterceptor($this->createMessenger());

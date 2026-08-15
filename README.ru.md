@@ -137,14 +137,54 @@ Property falsified after 246 successful run(s); seed=7382910
 телу нужен `$this`): их единственный вызов — рефлексия этого адаптера, поэтому
 dead-code-набор Rector удалил бы приватные.
 
+### Callable-провайдеры
+
+`generators` и `examples` также принимают callable. Строка сначала разрешается
+как имя метода тест-класса; только если такого метода нет, она считается именем
+внешнего callable. Нестрочные callable сохраняются и вызываются при разрешении
+property, поэтому invokable-провайдер можно передать прямо в атрибуте уже на
+PHP 8.3:
+
+```php
+final readonly class DelayGenerators
+{
+    /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */
+    public function __invoke(): array
+    {
+        return [
+            'base' => Gen::intBetween(1, 300),
+            'cap' => Gen::intBetween(1, 86_400),
+        ];
+    }
+}
+
+#[Property(generators: new DelayGenerators())]
+public function delayNeverExceedsCap(int $base, int $cap): void
+{
+}
+```
+
+Переиспользуемые static-провайдеры можно передать как
+`[Provider::class, 'method']` или `'Provider::method'`. В PHP 8.5 дополнительно
+доступны inline `static function (): array { ... }` и first-class callable,
+например `Provider::method(...)`. Метод тест-класса с именем глобальной функции
+(`range`, например) всё равно имеет приоритет над глобальной функцией.
+
+Обратная сторона строкового разрешения: опечатка в имени метода, совпавшая с
+глобальной функцией (`'count'`, `'range'`), приведёт к вызову этой функции —
+обычно это её собственный `ArgumentCountError` от вызова без аргументов, а
+для функции без обязательных аргументов — отказ валидации результата.
+Опечатка, не совпавшая ни с чем, падает сразу с
+`neither a method on … nor a callable`.
+
 ### Параметры атрибута
 
 | Параметр | Значение |
 |---|---|
 | `runs` | Число успешных проверок (по умолчанию 100). Discarded-прогоны не считаются |
 | `seed` | Пин случайной фазы для воспроизведения. Также отключает replay корпуса для этого свойства — запиненный прогон важнее |
-| `generators` | Имя метода генераторов; по умолчанию `<testMethod>Generators` |
-| `examples` | Имя метода примеров; по умолчанию `<testMethod>Examples` |
+| `generators` | Имя метода или `callable(): array<string, ArbitraryInterface>`; по умолчанию `<testMethod>Generators` |
+| `examples` | Имя метода или `callable(): iterable<array<mixed>>`; по умолчанию `<testMethod>Examples` |
 | `maxShrinks` | Лимит принятых shrink-шагов; `0` отключает shrinking |
 | `maxDiscards` | Бюджет discard-ов до провала с `GaveUpException`; по умолчанию `runs * 10` |
 | `timeoutMs` | Wall-clock дедлайн одного прогона — превышение валит свойство с `DeadlineExceededException` |

@@ -138,14 +138,55 @@ Declare generators and examples methods **`public static`** (`public` if the
 body needs `$this`): their only call site is this adapter's reflection, so
 Rector's dead-code set would delete private ones.
 
+### Callable providers
+
+`generators` and `examples` also accept a callable. Strings are resolved as a
+method on the property test class first; only when no such method exists are
+they treated as external callable names. Non-string callables are stored and
+invoked when the property is resolved, so an invokable provider can be written
+directly in a PHP 8.3 attribute:
+
+```php
+final readonly class DelayGenerators
+{
+    /** @return array<string, \Rasuvaeff\PropertyTesting\ArbitraryInterface> */
+    public function __invoke(): array
+    {
+        return [
+            'base' => Gen::intBetween(1, 300),
+            'cap' => Gen::intBetween(1, 86_400),
+        ];
+    }
+}
+
+#[Property(generators: new DelayGenerators())]
+public function delayNeverExceedsCap(int $base, int $cap): void
+{
+}
+```
+
+Reusable static providers can use either
+`[Provider::class, 'method']` or `'Provider::method'`. PHP 8.5 additionally
+allows an inline `static function (): array { ... }` or a first-class callable
+such as `Provider::method(...)` in the attribute. A method on the test class
+named like a global function (for example `range`) still wins over that global
+function.
+
+The flip side of string resolution: a misspelled method name that happens to
+match a global function (`'count'`, `'range'`) is invoked as that function —
+typically failing with its own `ArgumentCountError` from the zero-argument
+call, or, when the function takes no arguments, with the result validation
+rejecting its return. A typo matching nothing fails immediately with
+`neither a method on … nor a callable`.
+
 ### Attribute parameters
 
 | Parameter | Meaning |
 |---|---|
 | `runs` | Successful checks to complete (default 100). Discarded runs do not count |
 | `seed` | Pins the random phase for reproduction. Also disables corpus replay for this property — the pinned run wins |
-| `generators` | Name of the generators method; default `<testMethod>Generators` |
-| `examples` | Name of the examples method; default `<testMethod>Examples` |
+| `generators` | Method name or `callable(): array<string, ArbitraryInterface>`; default `<testMethod>Generators` |
+| `examples` | Method name or `callable(): iterable<array<mixed>>`; default `<testMethod>Examples` |
 | `maxShrinks` | Cap on accepted shrink steps; `0` disables shrinking |
 | `maxDiscards` | Discard budget before the property fails with `GaveUpException`; default `runs * 10` |
 | `timeoutMs` | Wall-clock deadline for a single run — exceeding it fails the property with `DeadlineExceededException` |

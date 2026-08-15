@@ -16,9 +16,10 @@ use Testo\Pipeline\Attribute\Interceptable;
  * generating random arguments from a generators method until the property has
  * completed {@see $runs} successful checks or exhausted its discard budget.
  *
- * Attribute arguments in PHP must be constant expressions, so the generators
- * cannot be passed inline. Instead name a method (on the same test case) that
- * returns `array<string, ArbitraryInterface>`, keyed by parameter name. When
+ * Attribute arguments in PHP must be constant expressions. A provider can be
+ * a method name, any callable accepted by an attribute expression, or an
+ * invokable provider object; callable providers return
+ * `array<string, ArbitraryInterface>`, keyed by parameter name. When
  * {@see $generators} is null the runner falls back to a method named
  * `<testMethod>Generators`.
  *
@@ -28,17 +29,22 @@ use Testo\Pipeline\Attribute\Interceptable;
 #[FallbackInterceptor(PropertyInterceptor::class)]
 final readonly class Property implements Interceptable
 {
+    public \Closure|string|null $generators;
+
+    public \Closure|string|null $examples;
+
     /**
      * @param int $runs Number of successful random inputs to check. Discarded inputs do not count.
      * @param ?int $seed Fixed seed for reproducibility. Omit to let the runner pick a random one
      *        (the failing seed is reported by {@see PropertyViolationException}).
-     * @param ?string $generators Method name returning array<string, ArbitraryInterface>.
-     *        Defaults to `<testMethod>Generators`.
+     * @param (callable(): array<string, ArbitraryInterface>)|string|null $generators Method name
+     *        or callable returning array<string, ArbitraryInterface>. Defaults to
+     *        `<testMethod>Generators`.
      * @param ?int $maxShrinks Cap on the number of accepted shrink steps. Null (default) means
      *        no cap. 0 disables shrinking, reporting the original counterexample unchanged.
-     * @param ?string $examples Method name returning iterable<array<mixed>> of fixed positional
-     *        argument tuples, each run (before the random inputs) as an explicit example.
-     *        Defaults to `<testMethod>Examples` when that method exists.
+     * @param (callable(): iterable<array<mixed>>)|string|null $examples Method name or callable
+     *        returning fixed positional argument tuples, each run (before the random inputs) as
+     *        an explicit example. Defaults to `<testMethod>Examples` when that method exists.
      * @param ?int $maxDiscards Maximum number of discarded inputs before the property gives up.
      *        Null (default) uses ten times the resolved run count.
      * @param ?int $timeoutMs Wall-clock deadline for a single run (random or example) in
@@ -74,9 +80,9 @@ final readonly class Property implements Interceptable
     public function __construct(
         public int $runs = 100,
         public ?int $seed = null,
-        public ?string $generators = null,
+        callable|string|null $generators = null,
         public ?int $maxShrinks = null,
-        public ?string $examples = null,
+        callable|string|null $examples = null,
         public ?int $maxDiscards = null,
         public ?int $timeoutMs = null,
         public ?int $budgetMs = null,
@@ -90,6 +96,13 @@ final readonly class Property implements Interceptable
         // mean something else.
         public EdgeCases $edgeCases = EdgeCases::Mixin,
     ) {
+        $this->generators = \is_string($generators) || $generators === null
+            ? $generators
+            : \Closure::fromCallable($generators);
+        $this->examples = \is_string($examples) || $examples === null
+            ? $examples
+            : \Closure::fromCallable($examples);
+
         if ($runs < 1) {
             throw new \InvalidArgumentException('Runs must be greater than or equal to 1');
         }
