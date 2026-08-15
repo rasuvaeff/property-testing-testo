@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- `PROPERTY_DB` now also takes a `redis://host[:port][/key-prefix]` DSN, which
+  builds core 0.3's `RedisCorpus`. Until now that class existed and no suite
+  could reach it: the engine reads no environment by design, and this adapter
+  hardcoded the filesystem corpus — so a corpus shared between CI and
+  developers was available only to harnesses that construct the runner
+  themselves. A directory keeps meaning exactly what it meant. `ext-redis` is
+  preferred when loaded, `predis/predis` otherwise, and neither installed is an
+  error rather than a silent fall back to the filesystem.
+
 ## 0.3.0 — 2026-08-15
 
 - Added `edgeCases` to `#[Property]` and `PROPERTY_EDGE_CASES` (`mixin` or

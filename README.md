@@ -170,13 +170,31 @@ what the attribute wrote down.
 | `PROPERTY_RUNS` | Positive integer that overrides every property's run count (dial runs up in CI) |
 | `PROPERTY_SEED` | Integer seed for any property whose attribute omits `seed` (replay a whole suite). An explicit attribute `seed` still wins |
 | `PROPERTY_VERBOSE` | Any value except `''`/`'0'` logs every run's generated arguments and each accepted shrink step |
-| `PROPERTY_DB` | Directory path enabling the regression corpus. Unset means off, nothing is written |
+| `PROPERTY_DB` | Directory path enabling the regression corpus, or a `redis://host[:port][/key-prefix]` DSN for a corpus shared between CI and developers. Unset means off, nothing is written |
 | `PROPERTY_PHASES` | Comma-separated stage list (`examples,corpus,random,shrink`, case-insensitive) that overrides the attribute — an unknown name throws rather than skipping a stage. `examples,corpus` is the fast pull-request gate |
 | `PROPERTY_DERANDOMIZE` | Any value except `''`/`'0'` derives every unset seed from the property id, making a whole suite reproducible without editing it |
 | `PROPERTY_PATH` | A recorded shrink descent replayed instead of searched for. Needs the seed that produced it; an attribute `path` wins |
 | `PROPERTY_EDGE_CASES` | `mixin` or `none` (case-insensitive) — the numeric boundary bias for the whole suite, overriding the attribute. An unknown value throws |
 
 ### Regression corpus
+
+`PROPERTY_DB` takes either a directory or a Redis DSN:
+
+```bash
+PROPERTY_DB=/tmp/corpus                  vendor/bin/testo   # one machine
+PROPERTY_DB=redis://127.0.0.1:6379       vendor/bin/testo   # shared
+PROPERTY_DB=redis://redis:6379/suite-a:  vendor/bin/testo   # shared server, own prefix
+```
+
+A directory remembers a counterexample for whoever owns it — in CI, a machine
+deleted when the job ends. The Redis form is the same corpus, in the same
+document, shared: a failure found on a laptop replays in CI and one found in CI
+replays on the next laptop. It needs `ext-redis` or `predis/predis`; neither
+installed is an error rather than a silent fall back to the filesystem, because
+a suite told to share its corpus and quietly writing where nobody reads is
+worse than one that stops.
+
+#### How entries are recorded
 
 Set `PROPERTY_DB` to a directory and every falsified property records its
 failure there. On the next run the recorded failures are replayed **first**

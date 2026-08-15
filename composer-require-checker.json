@@ -1,0 +1,19 @@
+{
+    "symbol-whitelist": [
+        "Predis\\Client",
+        "Redis"
+    ],
+    "php-core-extensions": [
+        "Core",
+        "date",
+        "json",
+        "hash",
+        "pcre",
+        "Phar",
+        "Reflection",
+        "SPL",
+        "random",
+        "standard"
+    ],
+    "scan-files": []
+}

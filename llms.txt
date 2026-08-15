@@ -107,7 +107,7 @@ public static function additionCommutesExamples(): array
 | `PROPERTY_RUNS` | positive int | Overrides every property's run count, including the attribute's |
 | `PROPERTY_SEED` | int | Seeds every property whose attribute omits `seed`; attribute wins |
 | `PROPERTY_VERBOSE` | anything but `''`/`'0'` | Logs each run's arguments and each accepted shrink step |
-| `PROPERTY_DB` | directory path | Enables the regression corpus: record on falsification, replay before the random phase, prune on green replay |
+| `PROPERTY_DB` | directory path OR `redis://host[:port][/key-prefix]` | Regression corpus: record on falsification, replay before the random phase, prune on green replay. A DSN builds a RedisCorpus (ext-redis preferred, else predis; neither installed THROWS) — same document as the directory form, shared between CI and developers |
 | `PROPERTY_PHASES` | `examples,corpus,random,shrink` (comma-separated, case-insensitive) | Stages to run; OVERRIDES the attribute; unknown name throws |
 | `PROPERTY_DERANDOMIZE` | anything but `''`/`'0'` | Unset seeds derived from the property id; OVERRIDES the attribute; an attribute `seed` still wins |
 | `PROPERTY_PATH` | recorded `CounterExample::$path` | Replays that descent; needs the seed of that run; an attribute `path` wins |
