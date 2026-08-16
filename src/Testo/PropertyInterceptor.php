@@ -135,8 +135,8 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 // failure and yield to what the attribute wrote down.
                 phases: $this->resolvePhases($property->phases),
                 derandomize: $derandomize,
-                edgeCases: $this->resolveEdgeCases($property->edgeCases),
                 path: $property->path ?? $this->resolvePath(),
+                edgeCases: $this->resolveEdgeCases($property->edgeCases),
             ),
             examples: $this->resolveExamples($reflection, $info, $property),
             // A pinned attribute seed wins over the corpus: replaying recorded
