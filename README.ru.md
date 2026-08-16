@@ -177,6 +177,60 @@ public function delayNeverExceedsCap(int $base, int $cap): void
 Опечатка, не совпавшая ни с чем, падает сразу с
 `neither a method on … nor a callable`.
 
+### Автогенераторы из сигнатуры (`auto: true`)
+
+Когда параметры полностью описаны типами, provider-метод можно не писать
+вовсе: `auto: true` строит генератор для каждого параметра из сигнатуры самой
+property через
+[`Gen::forParameters()`](https://github.com/rasuvaeff/property-testing-core) —
+psalm-тип из `@param`, если он есть (`int<1, 300>`, `non-empty-string`,
+`list<T>`, `'a'|'b'`), иначе нативный:
+
+```php
+/**
+ * @param int<1, 300> $base
+ * @param int<1, 86400> $cap
+ */
+#[Property(auto: true)]
+public function delayNeverExceedsCap(int $base, int $cap): void
+{
+}
+```
+
+Провайдер — явный или конвенционный `<testMethod>Generators` — становится
+**overrides** и может быть частичным: перечисленные в нём параметры берутся
+как есть, остальные достраиваются. Это выход для доменов, которые psalm-типом
+не выразить (float-диапазон, зависимая пара через `Gen::flatMap()`):
+
+```php
+/** @param int<1, 40> $attempt */
+#[Property(generators: 'provide', auto: true)]
+public function delayIsMonotonic(float $multiplier, int $attempt): void { /* … */ }
+
+/** @return array<string, ArbitraryInterface> */
+public static function provide(): array
+{
+    return ['multiplier' => Gen::floatBetween(1.0, 4.0)];   // остальное достраивается
+}
+```
+
+Правила, которые стоит знать:
+
+- **Строго opt-in.** `auto` по умолчанию `false` и дефолтом не станет никогда:
+  голый `int` или `float` достраивается до полного нативного домена, и только
+  автор property знает, тот ли это домен. Всё более узкое — аннотировать или
+  переопределять.
+- Нечитаемый тип (голый `array`, `mixed`, параметр без типа, variadic) — ошибка
+  с именем метода и параметра, никогда не «угаданный генератор пошире».
+- При `auto: true` ключ провайдера, не являющийся параметром property, —
+  ошибка: merge-семантика иначе молча заменила бы опечатанную запись
+  генератором из сигнатуры.
+- Полный провайдер плюс `auto: true` легален — auto ничего не достраивает; это
+  переходное состояние мигрирующего теста.
+- Переменной окружения `PROPERTY_AUTO` нет намеренно: окружение крутит сьют
+  (runs, phases), а `auto` меняет смысл аргументов конкретной property —
+  территория атрибута.
+
 ### Параметры атрибута
 
 | Параметр | Значение |
@@ -195,6 +249,7 @@ public function delayNeverExceedsCap(int $base, int $cap): void
 | `derandomize` | Выводит незаданный seed из id property вместо случайного; `seed` в атрибуте всё равно побеждает |
 | `path` | Воспроизводит записанный спуск shrink (`CounterExample::$path`) вместо поиска; требует `seed` |
 | `edgeCases` | `EdgeCases::None` выключает граничное смещение числовых генераторов — для property, которой края стоят только прогонов |
+| `auto` | Достраивает генераторы из сигнатуры property для параметров, не покрытых провайдером; провайдер становится частичными overrides. По умолчанию выключен и дефолтом не станет |
 
 ### Переменные окружения
 

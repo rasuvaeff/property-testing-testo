@@ -1870,6 +1870,127 @@ final class PropertyInterceptorTest
         Assert::same($result->getAttribute('coverage'), 'example-run');
     }
 
+    public function autoDerivesEveryGeneratorFromTheSignature(): void
+    {
+        // No provider anywhere: the @param annotations and the native bool are
+        // the whole specification.
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static function (TestInfo $info): TestResult {
+            [$base, $cap, $flag] = $info->arguments;
+
+            Assert::true($base >= 1 && $base <= 300);
+            Assert::true($cap >= 1 && $cap <= 86_400);
+            Assert::true(is_bool($flag));
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(AutoStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    public function autoTreatsAnExplicitProviderAsPartialOverrides(): void
+    {
+        // The provider covers the type-inexpressible float range; the annotated
+        // int is derived from the signature.
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static function (TestInfo $info): TestResult {
+            [$multiplier, $attempt] = $info->arguments;
+
+            Assert::true($multiplier >= 1.0 && $multiplier <= 4.0);
+            Assert::true($attempt >= 1 && $attempt <= 40);
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(AutoPartialProviderStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    public function autoTreatsTheConventionMethodAsPartialOverrides(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static function (TestInfo $info): TestResult {
+            [$multiplier, $attempt] = $info->arguments;
+
+            Assert::true($multiplier >= 1.0 && $multiplier <= 4.0);
+            Assert::true($attempt >= 1 && $attempt <= 40);
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(AutoPartialConventionStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    public function autoWithAFullProviderDerivesNothing(): void
+    {
+        // Legal on purpose: the transitional state while a test migrates.
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static function (TestInfo $info): TestResult {
+            Assert::same($info->arguments[0], 7);
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(AutoFullProviderStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    public function autoRejectsATypeItCannotReadNamingMethodAndParameter(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+        try {
+            $interceptor->runTest($this->info(AutoUnreadableStub::class, 'check'), $next);
+
+            Assert::fail('expected an InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            Assert::string($e->getMessage())->contains('AutoUnreadableStub::check()');
+            Assert::string($e->getMessage())->contains('parameter $anything is typed array');
+            Assert::string($e->getMessage())->contains('pass an override');
+        }
+    }
+
+    public function autoRejectsAProviderKeyThatIsNotAParameter(): void
+    {
+        // Merge semantics would silently replace a typoed provider entry with a
+        // signature-derived generator; an unknown key must be an error instead.
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+        try {
+            $interceptor->runTest($this->info(AutoUnknownKeyStub::class, 'check'), $next);
+
+            Assert::fail('expected an InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            Assert::string($e->getMessage())->contains('Property "check"');
+            Assert::string($e->getMessage())->contains('covers "y"');
+            Assert::string($e->getMessage())->contains('not a parameter');
+        }
+    }
+
+    public function withoutAutoAMissingProviderStillFailsWithTheEstablishedMessage(): void
+    {
+        // auto: false is the default and must stay byte-identical to 0.5 —
+        // including the message that asks for the generators method.
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+        try {
+            $interceptor->runTest($this->info(AutoStub::class, 'checkWithoutAuto'), $next);
+
+            Assert::fail('expected an InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            Assert::string($e->getMessage())->contains('requires a generators method "checkWithoutAutoGenerators"');
+        }
+    }
+
     private function info(string $class, string $method): TestInfo
     {
         $reflection = new \ReflectionMethod($class, $method);

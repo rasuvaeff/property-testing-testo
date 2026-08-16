@@ -23,6 +23,11 @@ use Testo\Pipeline\Attribute\Interceptable;
  * {@see $generators} is null the runner falls back to a method named
  * `<testMethod>Generators`.
  *
+ * With {@see $auto} the provider becomes optional: parameters it does not
+ * cover are derived from the property's own signature through
+ * {@see Gen::forParameters()} — the `@param` psalm type when there is one,
+ * the native type otherwise.
+ *
  * @api
  */
 #[\Attribute(\Attribute::TARGET_METHOD)]
@@ -76,6 +81,13 @@ final readonly class Property implements Interceptable
      *        searched for again. It needs the $seed of the run that produced it — the steps mean
      *        nothing against another one — and it is a debugging aid, not a fixture: editing a
      *        generator orphans it, which is what the regression corpus is for.
+     * @param bool $auto Derive a generator from the property's signature for every parameter the
+     *        provider does not cover — the `@param` psalm type when there is one (`int<1, 300>`
+     *        beats a bare `int`), the native type otherwise, and an error naming the parameter for
+     *        anything unreadable. The provider (explicit or conventional) becomes the overrides and
+     *        may be partial; it may also cover everything, in which case auto derives nothing.
+     *        Deliberately opt-in and deliberately without an environment knob: the environment
+     *        dials the suite, while this changes what one property's arguments mean.
      */
     public function __construct(
         public int $runs = 100,
@@ -91,10 +103,11 @@ final readonly class Property implements Interceptable
         public ?array $phases = null,
         public bool $derandomize = false,
         public ?string $path = null,
-        // Last on purpose: a parameter added anywhere else moves the ones after
-        // it, and every attribute passing them positionally would silently
-        // mean something else.
         public EdgeCases $edgeCases = EdgeCases::Mixin,
+        // Last on purpose: a parameter added anywhere else moves the ones
+        // after it, and every attribute passing them positionally would
+        // silently mean something else. New parameters append here.
+        public bool $auto = false,
     ) {
         $this->generators = \is_string($generators) || $generators === null
             ? $generators
