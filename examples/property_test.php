@@ -82,6 +82,22 @@ final class ListReversalProperties
             'b' => Gen::intBetween(0, 1_000_000),
         ];
     }
+
+    /**
+     * Auto-derived generators: with `auto: true` and fully-typed parameters no
+     * generators method is needed at all — the `@param` psalm types below ARE
+     * the specification. A provider (explicit or conventional) would become
+     * partial overrides for anything the types cannot express.
+     *
+     * @param int<0, 100> $percent
+     * @param non-empty-string $label
+     */
+    #[Property(runs: 200, auto: true)]
+    public function percentStaysWithinItsAnnotatedRange(int $percent, string $label): void
+    {
+        Assert::true($percent >= 0 && $percent <= 100);
+        Assert::true($label !== '');
+    }
 }
 
 echo 'Defined ' . ListReversalProperties::class . " — run the properties with: vendor/bin/testo\n";

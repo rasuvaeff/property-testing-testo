@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Added `#[Property(auto: true)]`: a generator is derived from the property's
+  own signature for every parameter the provider does not cover, via core
+  0.4's `Gen::forParameters()` (`@param` psalm type over native type; a type
+  it cannot read throws naming the method and the parameter). The provider —
+  explicit or the `<testMethod>Generators` convention — becomes the overrides
+  and may be partial; a full provider stays legal; with `auto` a provider key
+  that is not a parameter of the property is an error. Strictly opt-in — it
+  will never become the default — and deliberately without a `PROPERTY_AUTO`
+  environment variable. `auto: false` behavior is unchanged.
+- Requires `rasuvaeff/property-testing-core` `^0.4`.
+
 ## 0.5.0 — 2026-08-15
 
 - `#[Property]` `generators` and `examples` now accept reusable callable

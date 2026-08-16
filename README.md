@@ -179,6 +179,61 @@ call, or, when the function takes no arguments, with the result validation
 rejecting its return. A typo matching nothing fails immediately with
 `neither a method on … nor a callable`.
 
+### Auto-derived generators (`auto: true`)
+
+When the parameters are fully described by their types, the provider method can
+go away entirely: `auto: true` derives a generator for every parameter from the
+property's own signature via
+[`Gen::forParameters()`](https://github.com/rasuvaeff/property-testing-core) —
+the `@param` psalm type when there is one (`int<1, 300>`, `non-empty-string`,
+`list<T>`, `'a'|'b'`), the native type otherwise:
+
+```php
+/**
+ * @param int<1, 300> $base
+ * @param int<1, 86400> $cap
+ */
+#[Property(auto: true)]
+public function delayNeverExceedsCap(int $base, int $cap): void
+{
+}
+```
+
+The provider — explicit or the `<testMethod>Generators` convention — becomes
+the **overrides** and may be partial: the parameters it names are taken as
+given, the rest are derived. That is the escape hatch for domains no psalm type
+can express (a float range, a dependent pair built with `Gen::flatMap()`):
+
+```php
+/** @param int<1, 40> $attempt */
+#[Property(generators: 'provide', auto: true)]
+public function delayIsMonotonic(float $multiplier, int $attempt): void { /* … */ }
+
+/** @return array<string, ArbitraryInterface> */
+public static function provide(): array
+{
+    return ['multiplier' => Gen::floatBetween(1.0, 4.0)];   // the rest is derived
+}
+```
+
+Rules worth knowing:
+
+- **Strictly opt-in.** `auto` defaults to `false` and will never become the
+  default: a bare `int` or `float` derives its full native domain, and only
+  the property's author knows whether that is the intended one. Annotate or
+  override anything narrower.
+- A type the deriver cannot read (a bare `array`, `mixed`, an untyped or
+  variadic parameter) fails with an error naming the method and the parameter
+  — never a silently widened guess.
+- With `auto: true` a provider key that is not a parameter of the property is
+  an error: merge semantics would otherwise silently replace a typoed entry
+  with a signature-derived generator.
+- A full provider plus `auto: true` is legal — auto derives nothing; that is
+  the transitional state while a test migrates.
+- There is deliberately no `PROPERTY_AUTO` environment variable: the
+  environment dials the suite (runs, phases), while `auto` changes what one
+  property's arguments mean — attribute territory.
+
 ### Attribute parameters
 
 | Parameter | Meaning |
@@ -197,6 +252,7 @@ rejecting its return. A typo matching nothing fails immediately with
 | `derandomize` | Derives an unset seed from the property id instead of drawing one; an attribute `seed` still wins |
 | `path` | Replays a recorded shrink descent (`CounterExample::$path`) instead of searching for it; requires `seed` |
 | `edgeCases` | `EdgeCases::None` turns off the numeric boundary bias — for a property the edges only cost runs |
+| `auto` | Derives generators from the property's signature for every parameter the provider does not cover; the provider becomes partial overrides. Off by default, and stays off |
 
 ### Environment overrides
 

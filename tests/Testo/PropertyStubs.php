@@ -662,3 +662,78 @@ final class EdgeCasesStub
         return ['x' => Gen::intBetween(-1_000_000, 1_000_000)];
     }
 }
+
+final class AutoStub
+{
+    /**
+     * @param int<1, 300> $base
+     * @param int<1, 86400> $cap
+     */
+    #[Property(runs: 30, seed: 1, auto: true)]
+    public function check(int $base, int $cap, bool $flag): void {}
+
+    /** The same shape without auto: the 0.5 error message must survive. */
+    #[Property(runs: 5, seed: 1)]
+    public function checkWithoutAuto(int $base): void {}
+}
+
+final class AutoPartialProviderStub
+{
+    /** @param int<1, 40> $attempt */
+    #[Property(runs: 30, seed: 1, generators: 'provide', auto: true)]
+    public function check(float $multiplier, int $attempt): void {}
+
+    /**
+     * The one parameter whose domain no psalm type can express; $attempt
+     * comes from its annotation on the property itself.
+     *
+     * @return array<string, ArbitraryInterface>
+     */
+    public static function provide(): array
+    {
+        return ['multiplier' => Gen::floatBetween(1.0, 4.0)];
+    }
+}
+
+final class AutoPartialConventionStub
+{
+    /** @param int<1, 40> $attempt */
+    #[Property(runs: 30, seed: 1, auto: true)]
+    public function check(float $multiplier, int $attempt): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function checkGenerators(): array
+    {
+        return ['multiplier' => Gen::floatBetween(1.0, 4.0)];
+    }
+}
+
+final class AutoFullProviderStub
+{
+    #[Property(runs: 5, seed: 1, generators: 'provide', auto: true)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::constant(value: 7)];
+    }
+}
+
+final class AutoUnreadableStub
+{
+    #[Property(runs: 5, seed: 1, auto: true)]
+    public function check(array $anything): void {}
+}
+
+final class AutoUnknownKeyStub
+{
+    #[Property(runs: 5, seed: 1, generators: 'provide', auto: true)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['y' => Gen::constant(value: 7)];
+    }
+}

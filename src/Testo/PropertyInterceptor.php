@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rasuvaeff\PropertyTesting\Testo;
 
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
+use Rasuvaeff\PropertyTesting\Gen;
 use Rasuvaeff\PropertyTesting\Property;
 use Rasuvaeff\PropertyTesting\PropertyListener;
 use Rasuvaeff\PropertyTesting\Runner\Clock;
@@ -363,6 +364,11 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         $methodName = $testMethod->getName() . 'Generators';
 
         if ($provider === null && !$class->hasMethod($methodName)) {
+            if ($property->auto) {
+                // No provider at all: every parameter comes from the signature.
+                return Gen::forParameters($testMethod);
+            }
+
             throw new \InvalidArgumentException(sprintf(
                 'Property "%s" requires a generators method "%s" on %s returning array<string, ArbitraryInterface>',
                 $testMethod->getName(),
@@ -399,7 +405,33 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             $typed[(string) $name] = $generator;
         }
 
-        return $typed;
+        if (!$property->auto) {
+            return $typed;
+        }
+
+        // Under auto the provider is the overrides, and a key naming something
+        // the property does not take must be an error: merge semantics would
+        // otherwise silently replace a typoed entry with a signature-derived
+        // generator, and the property would run green in the wrong domain.
+        $parameters = [];
+        foreach ($testMethod->getParameters() as $parameter) {
+            $parameters[$parameter->getName()] = true;
+        }
+
+        foreach (array_keys($typed) as $name) {
+            if (!isset($parameters[$name])) {
+                throw new \InvalidArgumentException(sprintf(
+                    'Property "%s": generators %s covers "%s", which is not a parameter of the property',
+                    $testMethod->getName(),
+                    $providerLabel,
+                    $name,
+                ));
+            }
+        }
+
+        // The provider covers the parameters it names; the signature covers
+        // the rest — the forClass(overrides) model applied to the property.
+        return Gen::forParameters($testMethod, $typed);
     }
 
     /**

@@ -42,6 +42,13 @@ installation fails at resolution time.
 - The adapter aggregates per-run `TestResult` attributes (including Testo
   codecov's `CoverageResult`) onto the one result a property test reports —
   property tests participate in coverage and mutation testing.
+- `auto: true` derives a generator from the property's signature for every
+  parameter the provider does not cover (Gen::forParameters rules: `@param`
+  psalm type wins over the native type; unreadable types throw naming the
+  method and parameter). The provider becomes PARTIAL overrides; with auto a
+  provider key that is not a parameter is an error. Strictly opt-in, never the
+  default (bare int/float derive their full native domain). No PROPERTY_AUTO
+  env variable, deliberately.
 
 ## API
 
@@ -63,6 +70,7 @@ installation fails at resolution time.
     derandomize: false,    // unset seed derived from the property id
     path: null,            // replay a recorded shrink descent; REQUIRES seed
     edgeCases: EdgeCases::Mixin, // None = no numeric boundary bias
+    auto: false,           // derive missing generators from the signature; provider = partial overrides
 )]
 ```
 

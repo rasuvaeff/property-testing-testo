@@ -4,7 +4,7 @@ Runnable scripts demonstrating `rasuvaeff/property-testing-testo`.
 
 | Script | Shows | Needs server? |
 |---|---|---|
-| `property_test.php` | Canonical `#[Property]` usage as a real Testo test case, including an in-body dependent draw with `Gen::draw()` | No |
+| `property_test.php` | Canonical `#[Property]` usage as a real Testo test case, including an in-body dependent draw with `Gen::draw()` and signature-derived generators with `auto: true` | No |
 | `state_machine.php` | Stateful / model-based testing: a `Command` interface, `Gen::commands()`, and `StateMachine::check()` driving command sequences against a stack | No |
 
 ## Running
