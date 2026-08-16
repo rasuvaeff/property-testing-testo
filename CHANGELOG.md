@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 — 2026-08-16
 
 - Added `#[Property(auto: true)]`: a generator is derived from the property's
   own signature for every parameter the provider does not cover, via core
