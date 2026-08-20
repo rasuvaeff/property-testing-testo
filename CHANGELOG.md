@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.2 — 2026-08-20
+
+- Coverage is now merged across runs instead of kept from the last one. Each
+  trial opens its own coverage window, so last-write-wins dropped every line a
+  random input executed only sometimes, and made per-property coverage depend
+  on the seed. The aggregate now merges each run's `CoverageResult`, and sums
+  `duration` so the reported time is the whole property's rather than the last
+  trial's.
+- A per-run `Skipped`/`Cancelled` status is now a discard, not a silent pass. A
+  property whose body threw `SkipTest` on every run reported green having
+  asserted nothing; it now gives up like an all-discarded property.
+- `PROPERTY_DB` with credentials in its userinfo (`redis://user:pass@host`) is
+  rejected instead of silently dropped — `parse_url` would discard them and the
+  connection would go without AUTH. The error never echoes the DSN.
+- The resolved corpus is memoized per `PROPERTY_DB` value, so a suite sharing a
+  Redis corpus builds one client (and opens one connection) rather than one per
+  property.
+
 ## 0.6.1 — 2026-08-20
 
 - `PROPERTY_DB` with a non-`redis` URI scheme is now a configuration error

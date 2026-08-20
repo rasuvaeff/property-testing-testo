@@ -178,4 +178,20 @@ final class CorpusFromEnvTest
             $restore();
         }
     }
+
+    /**
+     * Resolving runs once per property, so the same `PROPERTY_DB` must hand back
+     * the same corpus — otherwise a Redis suite builds a client, and opens a
+     * connection on first recall, for every property.
+     */
+    public function resolvesTheSameCorpusInstanceForTheSameDsn(): void
+    {
+        $restore = Env::set('PROPERTY_DB', sys_get_temp_dir() . '/property-testing-memoized-corpus');
+
+        try {
+            Assert::same(CorpusFromEnv::resolve(), CorpusFromEnv::resolve());
+        } finally {
+            $restore();
+        }
+    }
 }

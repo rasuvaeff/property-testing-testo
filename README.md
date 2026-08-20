@@ -291,7 +291,8 @@ installed is an error rather than a silent fall back to the filesystem, because
 a suite told to share its corpus and quietly writing where nobody reads is
 worse than one that stops. A `PROPERTY_DB` with any other scheme — a `rediss://`
 typo, another backend — is likewise an error, never a directory named after the
-scheme.
+scheme. Credentials in the DSN (`redis://user:pass@host`) are rejected rather
+than silently dropped; configure Redis AUTH out of band.
 
 #### How entries are recorded
 

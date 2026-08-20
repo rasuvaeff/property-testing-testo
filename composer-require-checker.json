@@ -1,7 +1,8 @@
 {
     "symbol-whitelist": [
         "Predis\\Client",
-        "Redis"
+        "Redis",
+        "Testo\\Codecov\\Result\\CoverageResult"
     ],
     "php-core-extensions": [
         "Core",
