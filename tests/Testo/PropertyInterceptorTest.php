@@ -32,6 +32,7 @@ use Testo\Application\Internal\MessengerHub;
 use Testo\Assert;
 use Testo\Assert\ExpectException;
 use Testo\Codecov\Covers;
+use Testo\Codecov\Result\CoverageResult;
 use Testo\Common\Messenger;
 use Testo\Core\Context\CaseInfo;
 use Testo\Core\Context\Identity\SuiteIdentity;
@@ -584,6 +585,122 @@ final class PropertyInterceptorTest
 
         Assert::same($result->status, Status::Passed);
         Assert::same($calls, 6);
+    }
+
+    public function mergesCoverageAcrossRunsInsteadOfKeepingTheLast(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $calls = 0;
+        $next = static function (TestInfo $info) use (&$calls): TestResult {
+            ++$calls;
+
+            return new TestResult(
+                info: $info,
+                status: Status::Passed,
+                attributes: [CoverageResult::class => CoverageResult::fromRawData(["/run{$calls}.php" => [1 => 1]])],
+            );
+        };
+
+        $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+        $coverage = $result->attributes[CoverageResult::class];
+        Assert::instanceOf($coverage, CoverageResult::class);
+        // Five runs, five distinct files: the aggregate is the union, not the
+        // last run's single file.
+        Assert::same(count($coverage->files), 5);
+    }
+
+    public function aNonCoverageValueUnderTheCoverageKeyFallsThroughToLastWrite(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $calls = 0;
+        // The merge only runs when both sides are a CoverageResult; a later run
+        // storing something else under the same key must not call merge() on it.
+        $next = static function (TestInfo $info) use (&$calls): TestResult {
+            ++$calls;
+            $value = $calls === 5 ? 'replaced' : CoverageResult::fromRawData(["/run{$calls}.php" => [1 => 1]]);
+
+            return new TestResult(info: $info, status: Status::Passed, attributes: [CoverageResult::class => $value]);
+        };
+
+        $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+        Assert::same($result->attributes[CoverageResult::class], 'replaced');
+    }
+
+    public function sumsDurationAcrossRunsInsteadOfKeepingTheLast(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(
+            info: $info,
+            status: Status::Passed,
+            attributes: ['duration' => 10],
+        );
+
+        $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+        // Five runs at 10ms each: the reported duration is the property's total.
+        Assert::same($result->attributes['duration'], 50);
+    }
+
+    public function aNonIntDurationValueFallsThroughToLastWrite(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $calls = 0;
+        // duration only sums when both sides are int; a non-int under the key
+        // must fall through rather than be added to the running total.
+        $next = static function (TestInfo $info) use (&$calls): TestResult {
+            ++$calls;
+
+            return new TestResult(info: $info, status: Status::Passed, attributes: ['duration' => $calls === 5 ? 'x' : 10]);
+        };
+
+        $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+        Assert::same($result->attributes['duration'], 'x');
+    }
+
+    public function aNonIntCarriedDurationFallsThroughToLastWrite(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $calls = 0;
+        // The running total must be an int too: once a non-int lands under the
+        // key, the next int replaces it rather than being added to a string.
+        $next = static function (TestInfo $info) use (&$calls): TestResult {
+            ++$calls;
+
+            return new TestResult(info: $info, status: Status::Passed, attributes: ['duration' => $calls === 1 ? 'x' : 10]);
+        };
+
+        $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+        // run1 'x' (stored), run2 combines a string carry with int → last-write
+        // 10, runs 3-5 sum → 40.
+        Assert::same($result->attributes['duration'], 40);
+    }
+
+    public function foldsAPerRunSkipIntoADiscardSoAnAllSkippedPropertyGivesUp(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Skipped);
+
+        $result = $interceptor->runTest($this->info(DiscardBudgetStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Failed);
+        Assert::instanceOf($result->failure, GaveUpException::class);
+        Assert::same($result->failure->discardedRuns, 4);
+    }
+
+    public function foldsAPerRunCancelIntoADiscard(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Cancelled);
+
+        $result = $interceptor->runTest($this->info(DiscardBudgetStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Failed);
+        Assert::instanceOf($result->failure, GaveUpException::class);
+        Assert::same($result->failure->discardedRuns, 4);
     }
 
     public function passesThroughWhenMethodHasNoPropertyAttribute(): void

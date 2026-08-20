@@ -36,6 +36,15 @@ final class CorpusFromEnv
      */
     private const string SCHEME_PATTERN = '#^([a-zA-Z][a-zA-Z0-9+.\-]*)://#';
 
+    /**
+     * One corpus per distinct `PROPERTY_DB` value. Resolving happens once per
+     * property, so without this a suite sharing a Redis corpus would build a
+     * client — and open a connection on first recall — for every property.
+     *
+     * @var array<string, Corpus>
+     */
+    private static array $cache = [];
+
     private function __construct()
     {
         // Static helper; not instantiable.
@@ -53,6 +62,11 @@ final class CorpusFromEnv
             return null;
         }
 
+        return self::$cache[$dsn] ??= self::build($dsn);
+    }
+
+    private static function build(string $dsn): Corpus
+    {
         if (preg_match(self::SCHEME_PATTERN, $dsn, $matches) !== 1) {
             return new FilesystemCorpus($dsn);
         }
