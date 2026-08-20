@@ -142,4 +142,40 @@ final class CorpusFromEnvTest
             $restore();
         }
     }
+
+    /**
+     * A scheme other than `redis` — a `rediss://` typo, the wrong backend — is
+     * a configuration error, never a directory named `rediss:`. The message
+     * names the scheme but not the DSN, which may carry credentials.
+     */
+    public function aMistypedSchemeErrorsInsteadOfWritingToADirectory(): void
+    {
+        $restore = Env::set('PROPERTY_DB', 'rediss://127.0.0.1:6379/suite');
+
+        try {
+            CorpusFromEnv::resolve();
+
+            Assert::fail('expected an InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            Assert::string($e->getMessage())->contains('unsupported scheme "rediss://"');
+            Assert::false(str_contains($e->getMessage(), '127.0.0.1'));
+        } finally {
+            $restore();
+        }
+    }
+
+    /**
+     * URI schemes are case-insensitive, so `Redis://` is still a shared corpus,
+     * not a directory the previous exact-string check would have created.
+     */
+    public function theRedisSchemeIsMatchedCaseInsensitively(): void
+    {
+        $restore = Env::set('PROPERTY_DB', 'Redis://127.0.0.1:6399/suite:');
+
+        try {
+            Assert::instanceOf(CorpusFromEnv::resolve(), RedisCorpus::class);
+        } finally {
+            $restore();
+        }
+    }
 }

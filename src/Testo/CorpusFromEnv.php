@@ -29,7 +29,12 @@ use Rasuvaeff\PropertyTesting\Runner\RedisCorpus;
  */
 final class CorpusFromEnv
 {
-    private const string SCHEME = 'redis://';
+    /**
+     * A leading URI scheme: `redis` in `redis://host`. A value without one is
+     * a directory path; a value with a scheme that is not `redis` is a typo
+     * (`rediss://`, `Redis://`) or the wrong backend — never a directory.
+     */
+    private const string SCHEME_PATTERN = '#^([a-zA-Z][a-zA-Z0-9+.\-]*)://#';
 
     private function __construct()
     {
@@ -48,8 +53,18 @@ final class CorpusFromEnv
             return null;
         }
 
-        if (!str_starts_with($dsn, self::SCHEME)) {
+        if (preg_match(self::SCHEME_PATTERN, $dsn, $matches) !== 1) {
             return new FilesystemCorpus($dsn);
+        }
+
+        if (strtolower($matches[1]) !== 'redis') {
+            // Not a directory: a suite told to share its corpus, quietly
+            // writing to a directory nobody reads, is worse than one that
+            // stops. The DSN itself is not echoed — it may carry credentials.
+            throw new \InvalidArgumentException(sprintf(
+                'PROPERTY_DB uses an unsupported scheme "%s://"; use redis:// for a shared corpus or a plain directory path for a local one',
+                $matches[1],
+            ));
         }
 
         $parsed = RedisDsn::parse($dsn);

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.1 — 2026-08-20
+
+- `PROPERTY_DB` with a non-`redis` URI scheme is now a configuration error
+  instead of a directory named after the scheme. Only an exact `redis://`
+  prefix was recognised, so a `rediss://` typo — or any other scheme — fell
+  through to `FilesystemCorpus` and silently wrote the corpus to a directory
+  nobody reads, exactly the "silent fall back to the filesystem" the design
+  forbids. Scheme matching is now case-insensitive (`Redis://` is a shared
+  corpus) and the error names the scheme but not the DSN, which may carry
+  credentials. A path with no scheme is unchanged.
+
 ## 0.6.0 — 2026-08-16
 
 - Added `#[Property(auto: true)]`: a generator is derived from the property's

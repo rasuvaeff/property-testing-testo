@@ -289,7 +289,9 @@ document, shared: a failure found on a laptop replays in CI and one found in CI
 replays on the next laptop. It needs `ext-redis` or `predis/predis`; neither
 installed is an error rather than a silent fall back to the filesystem, because
 a suite told to share its corpus and quietly writing where nobody reads is
-worse than one that stops.
+worse than one that stops. A `PROPERTY_DB` with any other scheme — a `rediss://`
+typo, another backend — is likewise an error, never a directory named after the
+scheme.
 
 #### How entries are recorded
 
