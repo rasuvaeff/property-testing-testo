@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 — 2026-09-02
 
 - Requires `rasuvaeff/property-testing-core` `^0.5`. The corpus resolution
   and the `PROPERTY_*` parsing now come from the engine (`CorpusFactory`,
