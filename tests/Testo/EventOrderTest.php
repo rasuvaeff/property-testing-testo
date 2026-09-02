@@ -338,7 +338,7 @@ final class EventOrderTest
 
     private function cleanup(string $dir): void
     {
-        array_map(unlink(...), array_merge(glob($dir . '/*.json') ?: [], glob($dir . '/*.lock') ?: []));
+        array_map(unlink(...), array_merge(glob($dir . '/*.json') ?: [], glob($dir . '/*.lock') ?: [], glob($dir . '/.corpus.lock') ?: []));
         rmdir($dir);
     }
 

@@ -222,7 +222,7 @@ final class GoldenMessagesTest
             );
         } finally {
             $restoreEnv();
-            array_map(unlink(...), array_merge(glob($dir . '/*.json') ?: [], glob($dir . '/*.lock') ?: []));
+            array_map(unlink(...), array_merge(glob($dir . '/*.json') ?: [], glob($dir . '/*.lock') ?: [], glob($dir . '/.corpus.lock') ?: []));
             rmdir($dir);
         }
     }
