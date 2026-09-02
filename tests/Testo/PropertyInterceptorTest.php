@@ -16,6 +16,7 @@ use Rasuvaeff\PropertyTesting\Event\RunStarted;
 use Rasuvaeff\PropertyTesting\ExampleViolationException;
 use Rasuvaeff\PropertyTesting\GaveUpException;
 use Rasuvaeff\PropertyTesting\Gen;
+use Rasuvaeff\PropertyTesting\Property;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Rasuvaeff\PropertyTesting\RegressionViolationException;
 use Rasuvaeff\PropertyTesting\Runner\DeadlineExceeded;
@@ -30,7 +31,6 @@ use Rasuvaeff\PropertyTesting\Testo\Tests\Support\Env;
 use Rasuvaeff\PropertyTesting\TimeBudgetExceededException;
 use Testo\Application\Internal\MessengerHub;
 use Testo\Assert;
-use Testo\Assert\ExpectException;
 use Testo\Codecov\Covers;
 use Testo\Codecov\Result\CoverageResult;
 use Testo\Common\Messenger;
@@ -40,6 +40,7 @@ use Testo\Core\Context\TestInfo;
 use Testo\Core\Context\TestResult;
 use Testo\Core\Definition\CaseDefinition;
 use Testo\Core\Definition\TestDefinition;
+use Testo\Core\Exception\SkipTest;
 use Testo\Core\Log\Message;
 use Testo\Core\Value\Status;
 use Testo\Test;
@@ -192,40 +193,75 @@ final class PropertyInterceptorTest
         Assert::same($seen, [41, 8]);
     }
 
-    public function throwsWhenGeneratorsStringIsNeitherMethodNorCallable(): void
+    /**
+     * A property that cannot be set up is reported as this test's error, with
+     * the reason as its failure — not thrown through the pipeline, where Testo
+     * would wrap it into an aborted run with the message buried in `previous`.
+     */
+    private function misconfiguration(string $class, string $method = 'check'): \InvalidArgumentException
     {
         $interceptor = new PropertyInterceptor($this->createMessenger());
         $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
 
-        try {
-            $interceptor->runTest($this->info(MissingCallableGeneratorsStub::class, 'check'), $next);
-        } catch (\InvalidArgumentException $exception) {
-            Assert::string($exception->getMessage())
-                ->contains('generators provider "definitelyNotACallable123"')
-                ->contains('neither a method on');
+        $result = $interceptor->runTest($this->info($class, $method), $next);
 
-            return;
-        }
+        Assert::same($result->status, Status::Error);
+        Assert::instanceOf($result->failure, \InvalidArgumentException::class);
 
-        Assert::fail('Expected an InvalidArgumentException for an unresolvable generators provider');
+        return $result->failure;
     }
 
-    public function throwsWhenExamplesStringIsNeitherMethodNorCallable(): void
+    public function aDataProviderCombinedWithAPropertyIsAnError(): void
     {
+        // The provider's set would be overwritten by the generated arguments,
+        // and every set would share one corpus entry.
         $interceptor = new PropertyInterceptor($this->createMessenger());
         $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+        $info = $this->info(PassingStub::class, 'check')->with(arguments: [7]);
 
-        try {
-            $interceptor->runTest($this->info(MissingCallableExamplesStub::class, 'check'), $next);
-        } catch (\InvalidArgumentException $exception) {
-            Assert::string($exception->getMessage())
-                ->contains('examples provider "definitelyNotACallable123"')
-                ->contains('neither a method on');
+        $result = $interceptor->runTest($info, $next);
 
-            return;
-        }
+        Assert::same($result->status, Status::Error);
+        Assert::instanceOf($result->failure, \InvalidArgumentException::class);
+        Assert::string($result->failure->getMessage())->contains('cannot be combined with a data provider');
+    }
 
-        Assert::fail('Expected an InvalidArgumentException for an unresolvable examples provider');
+    public function aPropertyOnAFunctionBasedCaseIsAnError(): void
+    {
+        // Without a declaring class there are no generators/examples
+        // conventions and no corpus id; running the function once without
+        // arguments and passing would be the silent version of "unsupported".
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+        $function = #[Property(runs: 1)] static function (int $value): void {};
+        $info = new TestInfo(
+            name: 'closureCase',
+            caseInfo: new CaseInfo(
+                definition: new CaseDefinition(name: 'Stub', type: 'test', file: Path::create(__FILE__)),
+                suiteIdentity: new SuiteIdentity('Unit'),
+            ),
+            testDefinition: new TestDefinition(reflection: new \ReflectionFunction($function)),
+        );
+
+        $result = $interceptor->runTest($info, $next);
+
+        Assert::same($result->status, Status::Error);
+        Assert::instanceOf($result->failure, \InvalidArgumentException::class);
+        Assert::string($result->failure->getMessage())->contains('must be methods of a test case class');
+    }
+
+    public function reportsAnUnresolvableGeneratorsProviderAsAnError(): void
+    {
+        Assert::string($this->misconfiguration(MissingCallableGeneratorsStub::class)->getMessage())
+            ->contains('generators provider "definitelyNotACallable123"')
+            ->contains('neither a method on');
+    }
+
+    public function reportsAnUnresolvableExamplesProviderAsAnError(): void
+    {
+        Assert::string($this->misconfiguration(MissingCallableExamplesStub::class)->getMessage())
+            ->contains('examples provider "definitelyNotACallable123"')
+            ->contains('neither a method on');
     }
 
     public function falsifiesAndShrinksToMinimalCounterexample(): void
@@ -679,10 +715,33 @@ final class PropertyInterceptorTest
         Assert::same($result->attributes['duration'], 40);
     }
 
-    public function foldsAPerRunSkipIntoADiscardSoAnAllSkippedPropertyGivesUp(): void
+    public function anAllSkippedPropertyIsASkippedTest(): void
     {
+        // Every run skipped (`SkipTest` from the body or a hook): the property
+        // checked nothing, and that is the test being skipped — not "narrow the
+        // generators", which is what an exhausted discard budget would say.
         $interceptor = new PropertyInterceptor($this->createMessenger());
-        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Skipped);
+        $skip = new SkipTest('no redis here');
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Skipped, failure: $skip);
+
+        $result = $interceptor->runTest($this->info(DiscardBudgetStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Skipped);
+        Assert::same($result->failure, $skip);
+    }
+
+    public function aPartlySkippedPropertyStillDiscardsTheSkippedRuns(): void
+    {
+        // Skipped on every run but one: the discards count, and the budget of
+        // DiscardBudgetStub is exhausted by four of them before the required
+        // checks are made — that is a give-up, not a skip.
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $calls = 0;
+        $next = static function (TestInfo $info) use (&$calls): TestResult {
+            ++$calls;
+
+            return new TestResult(info: $info, status: $calls === 2 ? Status::Passed : Status::Skipped);
+        };
 
         $result = $interceptor->runTest($this->info(DiscardBudgetStub::class, 'check'), $next);
 
@@ -691,16 +750,43 @@ final class PropertyInterceptorTest
         Assert::same($result->failure->discardedRuns, 4);
     }
 
-    public function foldsAPerRunCancelIntoADiscard(): void
+    public function aRunThatEndsAbortedIsAFailureNotAPass(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Aborted);
+
+        $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Failed);
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+        Assert::string((string) $result->failure->getCounterExample()->failure?->getMessage())->contains('status Aborted');
+    }
+
+    public function aHookThatThrowsIsTheRunsFailureNotAnAbortedProperty(): void
+    {
+        // A BeforeTest hook (or any downstream interceptor) that throws must
+        // reach the engine as this run's failure and be shrunk like any other.
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static function (TestInfo $info): TestResult {
+            throw new \LogicException('setUp exploded');
+        };
+
+        $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Failed);
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+        Assert::instanceOf($result->failure->getCounterExample()->failure, \LogicException::class);
+    }
+
+    public function anAllCancelledPropertyIsASkippedTest(): void
     {
         $interceptor = new PropertyInterceptor($this->createMessenger());
         $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Cancelled);
 
         $result = $interceptor->runTest($this->info(DiscardBudgetStub::class, 'check'), $next);
 
-        Assert::same($result->status, Status::Failed);
-        Assert::instanceOf($result->failure, GaveUpException::class);
-        Assert::same($result->failure->discardedRuns, 4);
+        Assert::same($result->status, Status::Skipped);
+        Assert::null($result->failure);
     }
 
     public function passesThroughWhenMethodHasNoPropertyAttribute(): void
@@ -718,22 +804,14 @@ final class PropertyInterceptorTest
         Assert::true($called);
     }
 
-    #[ExpectException(\InvalidArgumentException::class)]
-    public function throwsWhenGeneratorsMethodIsMissing(): void
+    public function reportsAnErrorWhenGeneratorsMethodIsMissing(): void
     {
-        $interceptor = new PropertyInterceptor($this->createMessenger());
-        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
-
-        $interceptor->runTest($this->info(MissingGeneratorMethodStub::class, 'check'), $next);
+        $this->misconfiguration(MissingGeneratorMethodStub::class);
     }
 
-    #[ExpectException(\InvalidArgumentException::class)]
-    public function throwsWhenGeneratorMissingForAParameter(): void
+    public function reportsAnErrorWhenGeneratorMissingForAParameter(): void
     {
-        $interceptor = new PropertyInterceptor($this->createMessenger());
-        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
-
-        $interceptor->runTest($this->info(MissingParameterGeneratorStub::class, 'check'), $next);
+        $this->misconfiguration(MissingParameterGeneratorStub::class);
     }
 
     public function maxShrinksCapsTheNumberOfAcceptedShrinkSteps(): void
@@ -925,15 +1003,8 @@ final class PropertyInterceptorTest
         $restoreEnv = Env::set('PROPERTY_PHASES', 'examples,rundom');
 
         try {
-            $interceptor = new PropertyInterceptor($this->createMessenger());
-            $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
-
-            $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
-
-            Assert::fail('expected an InvalidArgumentException');
-        } catch (\InvalidArgumentException $e) {
             Assert::same(
-                $e->getMessage(),
+                $this->misconfiguration(PassingStub::class)->getMessage(),
                 'PROPERTY_PHASES must be a comma-separated list of examples, corpus, random, shrink, got "rundom"',
             );
         } finally {
@@ -1085,14 +1156,7 @@ final class PropertyInterceptorTest
         $restoreEnv = Env::set('PROPERTY_EDGE_CASES', 'sometimes');
 
         try {
-            $interceptor = new PropertyInterceptor($this->createMessenger());
-            $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
-
-            $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
-
-            Assert::fail('expected an InvalidArgumentException');
-        } catch (\InvalidArgumentException $e) {
-            Assert::same($e->getMessage(), 'PROPERTY_EDGE_CASES must be one of mixin, none, got "sometimes"');
+            Assert::same($this->misconfiguration(PassingStub::class)->getMessage(), 'PROPERTY_EDGE_CASES must be one of mixin, none, got "sometimes"');
         } finally {
             $restoreEnv();
         }
@@ -1145,31 +1209,23 @@ final class PropertyInterceptorTest
         Assert::fail('No PropertyStarted event was recorded');
     }
 
-    #[ExpectException(\InvalidArgumentException::class)]
     public function rejectsNonNumericPropertyRuns(): void
     {
         $restoreEnv = Env::set('PROPERTY_RUNS', 'abc');
 
         try {
-            $interceptor = new PropertyInterceptor($this->createMessenger());
-            $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
-
-            $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+            Assert::same($this->misconfiguration(PassingStub::class)->getMessage(), 'PROPERTY_RUNS must be a positive integer, got "abc"');
         } finally {
             $restoreEnv();
         }
     }
 
-    #[ExpectException(\InvalidArgumentException::class)]
     public function rejectsNonNumericPropertySeed(): void
     {
         $restoreEnv = Env::set('PROPERTY_SEED', 'abc');
 
         try {
-            $interceptor = new PropertyInterceptor($this->createMessenger());
-            $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
-
-            $interceptor->runTest($this->info(NoSeedFalsifyingStub::class, 'check'), $next);
+            Assert::same($this->misconfiguration(NoSeedFalsifyingStub::class)->getMessage(), 'PROPERTY_SEED must be an integer, got "abc"');
         } finally {
             $restoreEnv();
         }
@@ -1640,31 +1696,19 @@ final class PropertyInterceptorTest
         Assert::same($result->status, Status::Passed);
     }
 
-    #[ExpectException(\InvalidArgumentException::class)]
-    public function throwsWhenExampleArityMismatches(): void
+    public function reportsAnErrorWhenExampleArityMismatches(): void
     {
-        $interceptor = new PropertyInterceptor($this->createMessenger());
-        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
-
-        $interceptor->runTest($this->info(BadArityExampleStub::class, 'check'), $next);
+        $this->misconfiguration(BadArityExampleStub::class);
     }
 
-    #[ExpectException(\InvalidArgumentException::class)]
-    public function throwsWhenNamedExamplesMethodMissing(): void
+    public function reportsAnErrorWhenNamedExamplesMethodMissing(): void
     {
-        $interceptor = new PropertyInterceptor($this->createMessenger());
-        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
-
-        $interceptor->runTest($this->info(MissingExampleMethodStub::class, 'check'), $next);
+        $this->misconfiguration(MissingExampleMethodStub::class);
     }
 
-    #[ExpectException(\InvalidArgumentException::class)]
-    public function throwsWhenExampleIsNotAnArray(): void
+    public function reportsAnErrorWhenExampleIsNotAnArray(): void
     {
-        $interceptor = new PropertyInterceptor($this->createMessenger());
-        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
-
-        $interceptor->runTest($this->info(NonArrayExampleStub::class, 'check'), $next);
+        $this->misconfiguration(NonArrayExampleStub::class);
     }
 
     public function recordsTheMinimisedFailureWhenStorageEnabled(): void
@@ -2060,52 +2104,30 @@ final class PropertyInterceptorTest
 
     public function autoRejectsATypeItCannotReadNamingMethodAndParameter(): void
     {
-        $interceptor = new PropertyInterceptor($this->createMessenger());
-        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+        $e = $this->misconfiguration(AutoUnreadableStub::class);
 
-        try {
-            $interceptor->runTest($this->info(AutoUnreadableStub::class, 'check'), $next);
-
-            Assert::fail('expected an InvalidArgumentException');
-        } catch (\InvalidArgumentException $e) {
-            Assert::string($e->getMessage())->contains('AutoUnreadableStub::check()');
-            Assert::string($e->getMessage())->contains('parameter $anything is typed array');
-            Assert::string($e->getMessage())->contains('pass an override');
-        }
+        Assert::string($e->getMessage())->contains('AutoUnreadableStub::check()');
+        Assert::string($e->getMessage())->contains('parameter $anything is typed array');
+        Assert::string($e->getMessage())->contains('pass an override');
     }
 
     public function autoRejectsAProviderKeyThatIsNotAParameter(): void
     {
         // Merge semantics would silently replace a typoed provider entry with a
         // signature-derived generator; an unknown key must be an error instead.
-        $interceptor = new PropertyInterceptor($this->createMessenger());
-        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+        $e = $this->misconfiguration(AutoUnknownKeyStub::class);
 
-        try {
-            $interceptor->runTest($this->info(AutoUnknownKeyStub::class, 'check'), $next);
-
-            Assert::fail('expected an InvalidArgumentException');
-        } catch (\InvalidArgumentException $e) {
-            Assert::string($e->getMessage())->contains('Property "check"');
-            Assert::string($e->getMessage())->contains('covers "y"');
-            Assert::string($e->getMessage())->contains('not a parameter');
-        }
+        Assert::string($e->getMessage())->contains('Property "check"');
+        Assert::string($e->getMessage())->contains('covers "y"');
+        Assert::string($e->getMessage())->contains('not a parameter');
     }
 
     public function withoutAutoAMissingProviderStillFailsWithTheEstablishedMessage(): void
     {
         // auto: false is the default and must stay byte-identical to 0.5 —
         // including the message that asks for the generators method.
-        $interceptor = new PropertyInterceptor($this->createMessenger());
-        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
-
-        try {
-            $interceptor->runTest($this->info(AutoStub::class, 'checkWithoutAuto'), $next);
-
-            Assert::fail('expected an InvalidArgumentException');
-        } catch (\InvalidArgumentException $e) {
-            Assert::string($e->getMessage())->contains('requires a generators method "checkWithoutAutoGenerators"');
-        }
+        Assert::string($this->misconfiguration(AutoStub::class, 'checkWithoutAuto')->getMessage())
+            ->contains('requires a generators method "checkWithoutAutoGenerators"');
     }
 
     private function info(string $class, string $method): TestInfo

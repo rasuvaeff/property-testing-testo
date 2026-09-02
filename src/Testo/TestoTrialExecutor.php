@@ -16,7 +16,8 @@ use Testo\Core\Value\Status;
  * Executes the property body through Testo's interceptor pipeline and folds
  * each {@see TestResult} into the engine's {@see TrialOutcome}: an
  * {@see AssumptionSkipped} failure or a per-run skip/cancel is a discard, a
- * failing status is a failure, anything else passes.
+ * successful status passes, anything else — and anything the pipeline throws —
+ * is a failure.
  *
  * It also aggregates every run's result attributes. Downstream interceptors
  * attach per-run attributes to each run's TestResult — e.g. Testo's codecov
@@ -37,6 +38,12 @@ final class TestoTrialExecutor implements TrialExecutor
     /** @var array<non-empty-string, mixed> */
     private array $attributes = [];
 
+    private int $runs = 0;
+
+    private int $skipped = 0;
+
+    private ?\Throwable $firstSkip = null;
+
     /**
      * @param \Closure(TestInfo): TestResult $next
      */
@@ -48,7 +55,17 @@ final class TestoTrialExecutor implements TrialExecutor
     #[\Override]
     public function execute(array $arguments): TrialOutcome
     {
-        $result = ($this->next)($this->info->with(arguments: array_values($arguments)));
+        ++$this->runs;
+
+        try {
+            $result = ($this->next)($this->info->with(arguments: array_values($arguments)));
+        } catch (\Throwable $failure) {
+            // The pipeline below (a lifecycle hook, a downstream interceptor)
+            // threw instead of reporting: that is this run's failure, and it
+            // must reach the engine as one — escaping here would abort the
+            // whole property with no counterexample.
+            return $failure instanceof AssumptionSkipped ? TrialOutcome::discarded() : TrialOutcome::failed($failure);
+        }
 
         foreach (array_keys($result->attributes) as $key) {
             $this->attributes[$key] = $this->combine($this->attributes[$key] ?? null, $key, $result->attributes[$key]);
@@ -60,16 +77,42 @@ final class TestoTrialExecutor implements TrialExecutor
 
         if ($result->status === Status::Skipped || $result->status === Status::Cancelled) {
             // A per-run skip or cancel asserted nothing; folding it into a pass
-            // would report a green property that checked no input. Treat it as a
-            // discard so an all-skipped property gives up rather than passes.
+            // would report a green property that checked no input. It is a
+            // discard — and remembered, so a property whose every run skipped
+            // is reported as skipped rather than as one that gave up.
+            ++$this->skipped;
+            $this->firstSkip ??= $result->failure;
+
             return TrialOutcome::discarded();
         }
 
-        if ($result->status->isFailure()) {
-            return TrialOutcome::failed($result->failure);
+        if ($result->status->isSuccessful()) {
+            return TrialOutcome::passed();
         }
 
-        return TrialOutcome::passed();
+        // Failed, Error — and Aborted, Risky: anything that is not a success is
+        // not evidence the input passed.
+        return TrialOutcome::failed($result->failure ?? new \RuntimeException(sprintf(
+            'The run ended with status %s and no failure attached',
+            $result->status->name,
+        )));
+    }
+
+    /**
+     * Whether every run so far was skipped or cancelled (and there was one):
+     * the property as a whole is then a skipped test, not a failed one.
+     */
+    public function everyRunSkipped(): bool
+    {
+        return $this->runs > 0 && $this->skipped === $this->runs;
+    }
+
+    /**
+     * What the first skipped run reported, when it reported anything.
+     */
+    public function firstSkip(): ?\Throwable
+    {
+        return $this->firstSkip;
     }
 
     /**
