@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Allows `rasuvaeff/property-testing-core` `^0.6` beside `^0.5`: the 0.6 line changes nothing the adapter calls (the corpus and environment parsing it delegates keep their API), and its `SEQUENCE_EPOCH` bump only fences off seed entries recorded under 0.5.
+
 ## 0.7.0 — 2026-09-02
 
 - Requires `rasuvaeff/property-testing-core` `^0.5`. The corpus resolution
