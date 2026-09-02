@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+- Requires `rasuvaeff/property-testing-core` `^0.5`. The corpus resolution
+  and the `PROPERTY_*` parsing now come from the engine (`CorpusFactory`,
+  `EnvironmentOverrides`); the adapter's own `CorpusFromEnv`, `RedisDsn` and
+  `LazyPhpRedisCorpusClient` (all `@internal`) are gone. `PROPERTY_RUNS` /
+  `PROPERTY_SEED` past the integer range are refused instead of saturating.
+- The `PROPERTY_DB` Redis DSN has the IANA shape:
+  `redis://host[:port][/db][?prefix=key-prefix]`, `rediss://` for TLS. The
+  path is the database index; the pre-0.7 form with the key prefix in the
+  path (`redis://host/suite-a:`) is refused with the new spelling in the
+  message.
+- A property whose every run skipped (`SkipTest` from the body or a hook) is
+  reported as a skipped test carrying the first skip, instead of giving up
+  after `maxDiscards` with the advice to narrow the generators. Partly
+  skipped runs stay discards.
+- A misconfigured property — a missing generators method, an unresolvable
+  provider, a bad `PROPERTY_RUNS`, an unknown phase or edge-case mode — is
+  reported as `Status::Error` with the exception as its failure, instead of
+  being thrown through the pipeline and surfacing as an aborted run with the
+  message buried in `previous`.
+- `#[Property]` combined with a data provider, and `#[Property]` on a
+  function-based case, are refused as errors instead of silently overwriting
+  the provider's arguments or running the function once without any.
+- A throw from a lifecycle hook or a downstream interceptor is the run's
+  failure (shrunk like any other) instead of aborting the property without a
+  counterexample; a run that ends `Aborted` or `Risky` is a failure, no
+  longer a pass.
+- README: what the adapter combines with — hooks run per generated input,
+  `#[ExpectException]` does not see the body, `PROPERTY_PATH` is for one test.
+
 ## 0.6.2 — 2026-08-20
 
 - Coverage is now merged across runs instead of kept from the last one. Each

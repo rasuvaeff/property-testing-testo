@@ -56,7 +56,7 @@ mixed installation rather than let two copies of the namespace collide.
 ## Requirements
 
 - PHP 8.3+
-- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^0.1`
+- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^0.5`
 - [`testo/testo`](https://packagist.org/packages/testo/testo) `^0.10.39 || ^1.0`
 
 ## Installation
@@ -137,6 +137,24 @@ shrunk.
 Declare generators and examples methods **`public static`** (`public` if the
 body needs `$this`): their only call site is this adapter's reflection, so
 Rector's dead-code set would delete private ones.
+
+What the adapter does and does not combine with:
+
+- **Lifecycle hooks run on every property run.** The interceptor sits inside
+  Testo's lifecycle interceptor, so `#[BeforeTest]`/`#[AfterTest]` execute
+  once per generated input, not once per test (PHPUnit's `setUp` runs once).
+  A hook that throws is that run's failure and is shrunk like any other.
+- **A data provider cannot be combined with `#[Property]`** — the generators
+  supply the arguments — and `#[Property]` on a function-based case is
+  refused: both are reported as an error of the test with a message, as is
+  any other misconfiguration (a missing generators method, a bad
+  `PROPERTY_RUNS`, an unknown phase).
+- **`#[ExpectException]` does not see the body's exception**: the expectation
+  interceptor runs outside this one and observes the property's aggregate
+  failure. Assert on exceptions inside the body instead.
+- **A `SkipTest` thrown from the body or a hook skips the run**; when every
+  run skipped, the property is reported as a skipped test. Partly skipped runs
+  are discards and count against `maxDiscards`.
 
 ### Callable providers
 
@@ -267,10 +285,10 @@ what the attribute wrote down.
 | `PROPERTY_RUNS` | Positive integer that overrides every property's run count (dial runs up in CI) |
 | `PROPERTY_SEED` | Integer seed for any property whose attribute omits `seed` (replay a whole suite). An explicit attribute `seed` still wins |
 | `PROPERTY_VERBOSE` | Any value except `''`/`'0'` logs every run's generated arguments and each accepted shrink step |
-| `PROPERTY_DB` | Directory path enabling the regression corpus, or a `redis://host[:port][/key-prefix]` DSN for a corpus shared between CI and developers. Unset means off, nothing is written |
+| `PROPERTY_DB` | Directory path enabling the regression corpus, or a `redis://host[:port][/db][?prefix=key-prefix]` DSN (`rediss://` for TLS) for a corpus shared between CI and developers. Unset means off, nothing is written |
 | `PROPERTY_PHASES` | Comma-separated stage list (`examples,corpus,random,shrink`, case-insensitive) that overrides the attribute — an unknown name throws rather than skipping a stage. `examples,corpus` is the fast pull-request gate |
 | `PROPERTY_DERANDOMIZE` | Any value except `''`/`'0'` derives every unset seed from the property id, making a whole suite reproducible without editing it |
-| `PROPERTY_PATH` | A recorded shrink descent replayed instead of searched for. Needs the seed that produced it; an attribute `path` wins |
+| `PROPERTY_PATH` | A recorded shrink descent replayed instead of searched for. Needs the seed that produced it; an attribute `path` wins. It describes one failure, so run it with a filter on that one test — every other property would report the path as stale |
 | `PROPERTY_EDGE_CASES` | `mixin` or `none` (case-insensitive) — the numeric boundary bias for the whole suite, overriding the attribute. An unknown value throws |
 
 ### Regression corpus
@@ -278,10 +296,18 @@ what the attribute wrote down.
 `PROPERTY_DB` takes either a directory or a Redis DSN:
 
 ```bash
-PROPERTY_DB=/tmp/corpus                  vendor/bin/testo   # one machine
-PROPERTY_DB=redis://127.0.0.1:6379       vendor/bin/testo   # shared
-PROPERTY_DB=redis://redis:6379/suite-a:  vendor/bin/testo   # shared server, own prefix
+PROPERTY_DB=/tmp/corpus                           vendor/bin/testo   # one machine
+PROPERTY_DB=redis://127.0.0.1:6379                vendor/bin/testo   # shared
+PROPERTY_DB=redis://redis:6379/2?prefix=suite-a:  vendor/bin/testo   # shared server, database 2, own prefix
+PROPERTY_DB=rediss://redis.example.com            vendor/bin/testo   # TLS
 ```
+
+The DSN has the shape everything else gives it (the IANA registration, predis,
+Symfony): the path is the database index, the key prefix is the `prefix`
+query parameter, `rediss://` is TLS. The pre-0.7 form with the prefix in the
+path (`redis://host/suite-a:`) is refused with the new spelling in the
+message. The value is parsed by the engine's `CorpusFactory`, shared with the
+PHPUnit adapter.
 
 A directory remembers a counterexample for whoever owns it — in CI, a machine
 deleted when the job ends. The Redis form is the same corpus, in the same
@@ -289,7 +315,7 @@ document, shared: a failure found on a laptop replays in CI and one found in CI
 replays on the next laptop. It needs `ext-redis` or `predis/predis`; neither
 installed is an error rather than a silent fall back to the filesystem, because
 a suite told to share its corpus and quietly writing where nobody reads is
-worse than one that stops. A `PROPERTY_DB` with any other scheme — a `rediss://`
+worse than one that stops. A `PROPERTY_DB` with any other scheme — a `Rediss://`
 typo, another backend — is likewise an error, never a directory named after the
 scheme. Credentials in the DSN (`redis://user:pass@host`) are rejected rather
 than silently dropped; configure Redis AUTH out of band.
@@ -350,8 +376,11 @@ Everything there is usable from a `#[Property]` test as-is.
 |---|---|
 | `Rasuvaeff\PropertyTesting\Property` | The attribute — the same FQCN 2.x shipped |
 | `Rasuvaeff\PropertyTesting\Testo\PropertyInterceptor` | Testo interceptor: resolves reflection conventions and environment into a core `PropertyDefinition`, maps the structured result to one `TestResult` |
-| `Rasuvaeff\PropertyTesting\Testo\TestoTrialExecutor` | Executes the property body through Testo's pipeline, aggregating per-run `TestResult` attributes |
-| `Rasuvaeff\PropertyTesting\Testo\VerboseListener` | `PROPERTY_VERBOSE` output as an exception-hardened engine listener |
+
+`TestoTrialExecutor` and `VerboseListener` are `@internal`: the interceptor's
+implementation, not a contract. The environment variables and the `PROPERTY_DB`
+DSN are parsed by the engine (`EnvironmentOverrides`, `CorpusFactory`), so
+they mean the same thing under the PHPUnit adapter.
 
 ## Security
 

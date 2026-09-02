@@ -55,7 +55,7 @@ composer require --dev rasuvaeff/property-testing-testo
 ## Требования
 
 - PHP 8.3+
-- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^0.1`
+- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^0.5`
 - [`testo/testo`](https://packagist.org/packages/testo/testo) `^0.10.39 || ^1.0`
 
 ## Установка
@@ -136,6 +136,25 @@ Property falsified after 246 successful run(s); seed=7382910
 Методы генераторов и примеров объявляйте **`public static`** (`public`, если
 телу нужен `$this`): их единственный вызов — рефлексия этого адаптера, поэтому
 dead-code-набор Rector удалил бы приватные.
+
+С чем адаптер сочетается, а с чем нет:
+
+- **Lifecycle-хуки выполняются на каждый прогон property.** Интерцептор стоит
+  внутри lifecycle-интерцептора Testo, поэтому `#[BeforeTest]`/`#[AfterTest]`
+  исполняются на каждый сгенерированный вход, а не один раз на тест (в
+  PHPUnit `setUp` — один раз). Хук, бросивший исключение, — падение этого
+  прогона, оно shrink-ается как любое другое.
+- **Data provider не сочетается с `#[Property]`** — аргументы дают
+  генераторы; `#[Property]` на function-based кейсе отклоняется. Оба
+  случая, как и любая другая ошибка конфигурации (нет метода генераторов,
+  плохой `PROPERTY_RUNS`, неизвестная фаза), сообщаются как ошибка теста с
+  текстом причины.
+- **`#[ExpectException]` не видит исключение тела**: интерцептор ожиданий
+  стоит снаружи и наблюдает агрегатное падение property. Проверяйте
+  исключения внутри тела.
+- **`SkipTest` из тела или хука пропускает прогон**; если пропущены все
+  прогоны, property сообщается как пропущенный тест. Частично пропущенные
+  прогоны — discard'ы и учитываются в `maxDiscards`.
 
 ### Callable-провайдеры
 
@@ -264,10 +283,10 @@ public static function provide(): array
 | `PROPERTY_RUNS` | Положительное целое, переопределяет число прогонов каждого свойства (поднять в CI) |
 | `PROPERTY_SEED` | Целый seed для свойств без атрибутного `seed` (replay всей suite). Явный seed атрибута важнее |
 | `PROPERTY_VERBOSE` | Любое значение кроме `''`/`'0'` логирует аргументы каждого прогона и каждый принятый shrink-шаг |
-| `PROPERTY_DB` | Путь к каталогу, включающий регрессионный корпус, либо DSN `redis://host[:port][/key-prefix]` для корпуса, общего между CI и разработчиками. Не задан — выключен, ничего не пишется |
+| `PROPERTY_DB` | Путь к каталогу, включающий регрессионный корпус, либо DSN `redis://host[:port][/db][?prefix=key-prefix]` (`rediss://` для TLS) для корпуса, общего между CI и разработчиками. Не задан — выключен, ничего не пишется |
 | `PROPERTY_PHASES` | Список стадий через запятую (`examples,corpus,random,shrink`, регистр не важен), перекрывающий атрибут; неизвестное имя — исключение, а не пропуск стадии. `examples,corpus` — быстрый гейт для pull request |
 | `PROPERTY_DERANDOMIZE` | Любое значение, кроме `''`/`'0'`, выводит каждый незаданный seed из id property: весь сьют становится воспроизводимым без правки кода |
-| `PROPERTY_PATH` | Записанный спуск shrink воспроизводится вместо поиска. Нужен seed того прогона; `path` в атрибуте побеждает |
+| `PROPERTY_PATH` | Записанный спуск shrink воспроизводится вместо поиска. Нужен seed того прогона; `path` в атрибуте побеждает. Он описывает одно падение, поэтому запускайте с фильтром на этот один тест — любое другое property сообщит, что путь устарел |
 | `PROPERTY_EDGE_CASES` | `mixin` или `none` (регистр не важен) — граничное смещение для всего сьюта, перекрывает атрибут. Неизвестное значение — исключение |
 
 ### Корпус регрессий
@@ -275,10 +294,17 @@ public static function provide(): array
 `PROPERTY_DB` принимает либо каталог, либо Redis-DSN:
 
 ```bash
-PROPERTY_DB=/tmp/corpus                  vendor/bin/testo   # одна машина
-PROPERTY_DB=redis://127.0.0.1:6379       vendor/bin/testo   # общий
-PROPERTY_DB=redis://redis:6379/suite-a:  vendor/bin/testo   # общий сервер, свой префикс
+PROPERTY_DB=/tmp/corpus                           vendor/bin/testo   # одна машина
+PROPERTY_DB=redis://127.0.0.1:6379                vendor/bin/testo   # общий
+PROPERTY_DB=redis://redis:6379/2?prefix=suite-a:  vendor/bin/testo   # общий сервер, база 2, свой префикс
+PROPERTY_DB=rediss://redis.example.com            vendor/bin/testo   # TLS
 ```
+
+Форма DSN — та же, что у всех остальных (регистрация IANA, predis, Symfony):
+путь — индекс базы, префикс ключей — query-параметр `prefix`, `rediss://` —
+TLS. Форма до 0.7 с префиксом в пути (`redis://host/suite-a:`) отклоняется с
+подсказкой нового написания. Значение разбирает `CorpusFactory` движка,
+общий с PHPUnit-адаптером.
 
 Каталог помнит контрпример для того, кто им владеет, — а в CI это машина,
 которую удаляют вместе с job'ом. Redis-форма — тот же корпус в том же
@@ -346,8 +372,11 @@ public static function stackBehavesLikeItsModelGenerators(): array
 |---|---|
 | `Rasuvaeff\PropertyTesting\Property` | Атрибут — тот же FQCN, что и в 2.x |
 | `Rasuvaeff\PropertyTesting\Testo\PropertyInterceptor` | Интерцептор Testo: разрешает reflection-конвенции и окружение в core `PropertyDefinition`, маппит структурированный результат в один `TestResult` |
-| `Rasuvaeff\PropertyTesting\Testo\TestoTrialExecutor` | Выполняет тело свойства через pipeline Testo, агрегируя per-run атрибуты `TestResult` |
-| `Rasuvaeff\PropertyTesting\Testo\VerboseListener` | Вывод `PROPERTY_VERBOSE` как exception-hardened listener движка |
+
+`TestoTrialExecutor` и `VerboseListener` — `@internal`: реализация
+интерцептора, а не контракт. Переменные окружения и DSN `PROPERTY_DB`
+разбирает движок (`EnvironmentOverrides`, `CorpusFactory`), поэтому под
+PHPUnit-адаптером они значат то же самое.
 
 ## Безопасность
 
