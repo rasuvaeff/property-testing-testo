@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.2 — 2026-09-03
+
+- Repair the interceptor benchmark fixture so it runs through a configured
+  nested Testo pipeline and compares the current implementation with a
+  baseline.
+
 ## 0.7.1 — 2026-09-03
 
 - Allows `rasuvaeff/property-testing-core` `^0.6` beside `^0.5`: the 0.6 line changes nothing the adapter calls (the corpus and environment parsing it delegates keep their API), and its `SEQUENCE_EPOCH` bump only fences off seed entries recorded under 0.5.
