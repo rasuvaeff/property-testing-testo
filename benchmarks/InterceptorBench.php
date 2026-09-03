@@ -4,36 +4,21 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\PropertyTesting\Benchmarks;
 
-use Rasuvaeff\PropertyTesting\ArbitraryInterface;
-use Rasuvaeff\PropertyTesting\Gen;
-use Rasuvaeff\PropertyTesting\Property;
 use Testo\Bench;
+use Testo\Testing\Attribute\TestingSuite;
 use Testo\Testing\Helper\TestRunner;
 
+#[TestingSuite(path: __DIR__ . '/BenchPropertyFixture.php')]
 final class InterceptorBench
 {
-    #[Bench([], calls: 20, iterations: 3)]
+    #[Bench(['baseline' => [self::class, 'runProperty']], calls: 20, iterations: 3, tolerance: \INF)]
     public static function passingPropertyThroughTheRealPipeline(): void
     {
         TestRunner::runTest([BenchPropertyFixture::class, 'sumIsCommutative']);
     }
-}
 
-/**
- * @internal
- */
-final class BenchPropertyFixture
-{
-    #[\Testo\Test]
-    #[Property(runs: 50, seed: 1)]
-    public function sumIsCommutative(int $a, int $b): void
+    public static function runProperty(): void
     {
-        \Testo\Assert::same($a + $b, $b + $a);
-    }
-
-    /** @return array<string, ArbitraryInterface> */
-    public static function sumIsCommutativeGenerators(): array
-    {
-        return ['a' => Gen::intBetween(-1_000, 1_000), 'b' => Gen::intBetween(-1_000, 1_000)];
+        TestRunner::runTest([BenchPropertyFixture::class, 'sumIsCommutative']);
     }
 }
