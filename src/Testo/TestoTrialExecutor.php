@@ -17,9 +17,9 @@ use Testo\Core\Value\Status;
 /**
  * Executes the property body through Testo's interceptor pipeline and folds
  * each {@see TestResult} into the engine's {@see TrialOutcome}: an
- * {@see AssumptionSkipped} failure or a per-run skip/cancel is a discard, a
- * successful status passes, anything else — and anything the pipeline throws —
- * is a failure.
+ * {@see AssumptionSkipped} failure is a discard, a per-run skip/cancel is a
+ * skip (a discard the corpus does not prune on), a successful status passes,
+ * and anything else — including anything the pipeline throws — is a failure.
  *
  * It also aggregates every run's result attributes. Downstream interceptors
  * attach per-run attributes to each run's TestResult — e.g. Testo's codecov
@@ -112,14 +112,21 @@ final class TestoTrialExecutor implements TrialExecutor
     /**
      * Records one skipped run — from the body, where the terminal handler
      * reports it as a status, or from a hook, where it arrives as a throw —
-     * and reports it to the engine as a discard.
+     * and reports it to the engine as a skip.
+     *
+     * A skip, not a plain discard: the engine counts both the same everywhere
+     * but the corpus phase, where a discard means the recorded input left the
+     * property's domain and the entry is pruned. A skip says nothing about the
+     * input, so reporting one as a discard let a machine without the
+     * dependency the body guards against delete the counterexample for every
+     * machine that has it.
      */
     private function skip(?\Throwable $reported): TrialOutcome
     {
         ++$this->skipped;
         $this->firstSkip ??= $reported;
 
-        return TrialOutcome::discarded();
+        return TrialOutcome::skipped();
     }
 
     /**

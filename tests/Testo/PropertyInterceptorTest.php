@@ -866,6 +866,26 @@ final class PropertyInterceptorTest
         Assert::same($result->failure, $skip);
     }
 
+    public function aSkippedRunIsReportedToTheEngineAsASkipNotAPlainDiscard(): void
+    {
+        // The engine counts both the same everywhere but the corpus phase,
+        // where a discard means "the recorded input left the domain" and the
+        // entry is pruned. A skip says nothing about the input, so reporting
+        // one as a discard let a machine without the dependency delete the
+        // counterexample for every machine that has it.
+        $executor = new TestoTrialExecutor(
+            $this->info(PassingStub::class, 'check'),
+            static function (TestInfo $info): TestResult {
+                throw new SkipTest('no redis here');
+            },
+        );
+
+        $outcome = $executor->execute(['x' => 1]);
+
+        Assert::true($outcome->isSkipped());
+        Assert::true($outcome->isDiscarded());
+    }
+
     public function aHookThatCancelsSkipsThePropertyToo(): void
     {
         $interceptor = new PropertyInterceptor($this->createMessenger());

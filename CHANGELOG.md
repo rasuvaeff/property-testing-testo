@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- A skipped run — from the body or from a lifecycle hook — is reported to the
+  engine as `TrialOutcome::skipped()` rather than as a plain discard, so a
+  recorded regression whose replay only skipped is kept instead of pruned. A
+  machine without the dependency the body guards against used to delete the
+  counterexample for every machine that has it. Requires
+  `rasuvaeff/property-testing-core` ^0.8.
 - A `SkipTest` or `CancelTest` raised from a **lifecycle hook** now skips the
   property, the way `README.md` has always described it. The lifecycle
   interceptor is innermost, so a hook's throw never reached the handler that
