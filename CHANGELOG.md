@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.3 — 2026-09-04
 
 - Allows `rasuvaeff/property-testing-core` `^0.7`.
 - Tests are isolated from a `PROPERTY_DB` exported for the whole run: the suite
