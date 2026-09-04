@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 — 2026-09-04
 
 - A skipped run — from the body or from a lifecycle hook — is reported to the
   engine as `TrialOutcome::skipped()` rather than as a plain discard, so a
