@@ -40,8 +40,10 @@ use Testo\Core\Context\TestInfo;
 use Testo\Core\Context\TestResult;
 use Testo\Core\Definition\CaseDefinition;
 use Testo\Core\Definition\TestDefinition;
+use Testo\Core\Exception\CancelTest;
 use Testo\Core\Exception\SkipTest;
 use Testo\Core\Log\Message;
+use Testo\Core\Value\CaseInstance;
 use Testo\Core\Value\Status;
 use Testo\Lifecycle\AfterTest;
 use Testo\Lifecycle\BeforeTest;
@@ -233,6 +235,64 @@ final class PropertyInterceptorTest
         Assert::instanceOf($result->failure, \InvalidArgumentException::class);
 
         return $result->failure;
+    }
+
+    public function anAttributeArgumentOfTheWrongShapeIsThisTestsErrorNotAnAbortedPipeline(): void
+    {
+        // `[Provider::class, 'missingMethod']` is not a callable, so PHP raises
+        // a TypeError from newInstance() — outside the InvalidArgumentException
+        // the setup catch was written for. Uncaught it escapes the pipeline and
+        // comes back as Status::Aborted with "Error during test execution
+        // pipeline." on top and the reason buried in `previous`.
+        $e = $this->misconfiguration(NonCallableArrayProviderStub::class);
+
+        Assert::string($e->getMessage())->contains('#[Property] on "check" cannot be set up');
+        Assert::instanceOf($e->getPrevious(), \TypeError::class);
+    }
+
+    public function aNonStaticProviderWithoutATestCaseInstanceNamesItself(): void
+    {
+        // getClosure(null) on an instance method is a ValueError, which reads
+        // as an internal failure rather than as the fixable mistake it is.
+        $e = $this->misconfiguration(InstanceProviderStub::class);
+
+        Assert::string($e->getMessage())->contains('"provide"');
+        Assert::string($e->getMessage())->contains('is not static and has no test-case instance');
+        Assert::string($e->getMessage())->contains('make it static');
+    }
+
+    public function aNonStaticProviderRunsOnTheTestCaseInstance(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+        $result = $interceptor->runTest(
+            $this->infoWithInstance(InstanceProviderStub::class, 'check', new InstanceProviderStub()),
+            $next,
+        );
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    public function generatorsThatDoNotReturnAnArrayAreRefusedByName(): void
+    {
+        $e = $this->misconfiguration(NonArrayGeneratorsStub::class);
+
+        Assert::string($e->getMessage())->contains('Generators method "provide" must return an array, got string');
+    }
+
+    public function generatorsThatReturnSomethingElseThanAnArbitraryAreRefusedByKey(): void
+    {
+        $e = $this->misconfiguration(NonArbitraryGeneratorsStub::class);
+
+        Assert::string($e->getMessage())->contains('must return array<string, ArbitraryInterface>, got int for key "x"');
+    }
+
+    public function examplesThatAreNotIterableAreRefusedByName(): void
+    {
+        $e = $this->misconfiguration(NonIterableExamplesStub::class);
+
+        Assert::string($e->getMessage())->contains('Examples method "checkExamples" must return an iterable, got int');
     }
 
     public function aDataProviderCombinedWithAPropertyIsAnError(): void
@@ -786,6 +846,61 @@ final class PropertyInterceptorTest
         Assert::string((string) $result->failure->getCounterExample()->failure?->getMessage())->contains('status Aborted');
     }
 
+    public function aHookThatSkipsSkipsThePropertyInsteadOfFalsifyingIt(): void
+    {
+        // The lifecycle interceptor sits inside this closure (order PHP_INT_MAX)
+        // and runs `#[BeforeTest]` before delegating, so a SkipTest it raises
+        // never reaches the terminal handler that turns a skip from the body
+        // into a Status::Skipped result — it arrives here as a throw. Folded
+        // into a failure it falsified the property and shrank around the skip;
+        // README promises a skip from the body *or a hook* skips the run.
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $skip = new SkipTest('no redis here');
+        $next = static function (TestInfo $info) use ($skip): TestResult {
+            throw $skip;
+        };
+
+        $result = $interceptor->runTest($this->info(DiscardBudgetStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Skipped);
+        Assert::same($result->failure, $skip);
+    }
+
+    public function aHookThatCancelsSkipsThePropertyToo(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $cancel = new CancelTest('cancelled');
+        $next = static function (TestInfo $info) use ($cancel): TestResult {
+            throw $cancel;
+        };
+
+        $result = $interceptor->runTest($this->info(DiscardBudgetStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Skipped);
+        Assert::same($result->failure, $cancel);
+    }
+
+    public function aHookThatSkipsOnlySomeRunsStillDiscardsThem(): void
+    {
+        // Not every run skipped, so this is not a skipped test: the skipped
+        // runs are discards and DiscardBudgetStub's budget of 3 runs out.
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $calls = 0;
+        $next = static function (TestInfo $info) use (&$calls): TestResult {
+            if (++$calls !== 2) {
+                throw new SkipTest('flaky environment');
+            }
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(DiscardBudgetStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Failed);
+        Assert::instanceOf($result->failure, GaveUpException::class);
+        Assert::same($result->failure->discardedRuns, 4);
+    }
+
     public function aHookThatThrowsIsTheRunsFailureNotAnAbortedProperty(): void
     {
         // A BeforeTest hook (or any downstream interceptor) that throws must
@@ -1114,6 +1229,58 @@ final class PropertyInterceptorTest
                 $replayed->failure->getCounterExample()->shrinkTrials
                     < $first->failure->getCounterExample()->shrinkTrials,
             );
+        } finally {
+            $restoreEnv();
+        }
+    }
+
+    public function envPropertyPathWithoutASeedIsRefusedInsteadOfSilentlyDoingNothing(): void
+    {
+        // The engine refuses a path without a seed and the attribute refuses
+        // its own combination, but neither sees this one: the adapter draws a
+        // random seed for an unseeded property, so the engine is handed a seed
+        // and stays quiet while the path describes a descent of a run that
+        // never happened. AGENTS promises the engine rejects a path that would
+        // be a silent no-op — here it cannot, so the adapter must.
+        $restoreEnv = Env::set('PROPERTY_PATH', 'x:0');
+
+        try {
+            $e = $this->misconfiguration(NoSeedFalsifyingStub::class);
+
+            Assert::string($e->getMessage())->contains('PROPERTY_PATH replays one recorded descent');
+            Assert::string($e->getMessage())->contains('set PROPERTY_SEED too');
+        } finally {
+            $restoreEnv();
+        }
+    }
+
+    public function envPropertyPathIsAcceptedOnceTheSeedIsPinnedByTheEnvironment(): void
+    {
+        // PROPERTY_SEED pins the run the path was recorded against, so the
+        // replay is reproducible and the refusal above must not fire.
+        $failing = static fn(TestInfo $info): TestResult => $info->arguments[0] >= 100
+            ? new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('x>=100'))
+            : new TestResult(info: $info, status: Status::Passed);
+
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $restoreEnv = Env::setMany(['PROPERTY_SEED' => '4242', 'PROPERTY_PATH' => null]);
+
+        try {
+            $first = $interceptor->runTest($this->info(NoSeedShrinkPathStub::class, 'check'), $failing);
+            Assert::instanceOf($first->failure, PropertyViolationException::class);
+            $path = $first->failure->getCounterExample()->path;
+            Assert::false($path === '');
+
+            $restorePath = Env::set('PROPERTY_PATH', $path);
+
+            try {
+                $replayed = $interceptor->runTest($this->info(NoSeedShrinkPathStub::class, 'check'), $failing);
+
+                Assert::instanceOf($replayed->failure, PropertyViolationException::class);
+                Assert::same($replayed->failure->getCounterExample()->path, $path);
+            } finally {
+                $restorePath();
+            }
         } finally {
             $restoreEnv();
         }
@@ -2194,6 +2361,35 @@ final class PropertyInterceptorTest
             caseInfo: new CaseInfo(
                 definition: new CaseDefinition(name: 'Stub', type: 'test', file: Path::create(__FILE__)),
                 suiteIdentity: new SuiteIdentity('Unit'),
+            ),
+            testDefinition: new TestDefinition(reflection: $reflection),
+        );
+    }
+
+    private function infoWithInstance(string $class, string $method, object $instance): TestInfo
+    {
+        $reflection = new \ReflectionMethod($class, $method);
+
+        return new TestInfo(
+            name: $method,
+            caseInfo: new CaseInfo(
+                definition: new CaseDefinition(name: 'Stub', type: 'test', file: Path::create(__FILE__)),
+                suiteIdentity: new SuiteIdentity('Unit'),
+                instance: new class ($instance) implements CaseInstance {
+                    public function __construct(private readonly object $instance) {}
+
+                    #[\Override]
+                    public function getInstance(): object
+                    {
+                        return $this->instance;
+                    }
+
+                    #[\Override]
+                    public function hasInstance(): bool
+                    {
+                        return true;
+                    }
+                },
             ),
             testDefinition: new TestDefinition(reflection: $reflection),
         );

@@ -737,3 +737,79 @@ final class AutoUnknownKeyStub
         return ['y' => Gen::constant(value: 7)];
     }
 }
+
+final class InstanceProviderStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class NonArrayGeneratorsStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    public static function provide(): string
+    {
+        return 'not an array';
+    }
+}
+
+final class NonArbitraryGeneratorsStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, mixed> */
+    public static function provide(): array
+    {
+        return ['x' => 7];
+    }
+}
+
+final class NonIterableExamplesStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+
+    public static function checkExamples(): int
+    {
+        return 7;
+    }
+}
+
+final class DrawGoldenStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class NoSeedShrinkPathStub
+{
+    #[Property(runs: 100, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(0, 10_000)];
+    }
+}

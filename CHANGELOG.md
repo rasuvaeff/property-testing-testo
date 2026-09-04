@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- A `SkipTest` or `CancelTest` raised from a **lifecycle hook** now skips the
+  property, the way `README.md` has always described it. The lifecycle
+  interceptor is innermost, so a hook's throw never reached the handler that
+  turns a skip from the body into a status: the engine took it as a
+  falsification and shrank around the skip, re-running the hook on every trial.
+- `PROPERTY_PATH` without a pinned seed is refused instead of doing nothing.
+  The adapter draws a random seed for an unseeded property, so the engine's own
+  "a path needs a seed" check never fired and the path silently described a
+  descent of a run that never happened.
+- An attribute argument PHP rejects with a `TypeError` or `ValueError` —
+  `generators: [Provider::class, 'missingMethod']` is not a callable — is
+  reported as this test's error with the reason in the message, instead of
+  escaping the pipeline and coming back as `Status::Aborted` with the reason
+  buried in `previous`. A generators or examples provider that is not static
+  and has no test-case instance to run on says so by name.
+
 ## 0.7.3 — 2026-09-04
 
 - Allows `rasuvaeff/property-testing-core` `^0.7`.

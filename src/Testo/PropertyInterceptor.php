@@ -15,7 +15,6 @@ use Rasuvaeff\PropertyTesting\Runner\CoverageFailed;
 use Rasuvaeff\PropertyTesting\Runner\EnvironmentOverrides;
 use Rasuvaeff\PropertyTesting\Runner\GaveUp;
 use Rasuvaeff\PropertyTesting\Runner\Passed;
-use Rasuvaeff\PropertyTesting\Runner\Phase;
 use Rasuvaeff\PropertyTesting\Runner\PropertyConfig;
 use Rasuvaeff\PropertyTesting\Runner\PropertyDefinition;
 use Rasuvaeff\PropertyTesting\Runner\PropertyResult;
@@ -113,6 +112,20 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
 
             $property = $attributes[0]->newInstance();
             $derandomize = EnvironmentOverrides::flag(getenv('PROPERTY_DERANDOMIZE')) ?? $property->derandomize;
+            $path = $property->path ?? EnvironmentOverrides::string(getenv('PROPERTY_PATH'));
+            $pinnedSeed = $property->seed ?? EnvironmentOverrides::seed(getenv('PROPERTY_SEED'));
+
+            if ($path !== null && $pinnedSeed === null) {
+                // The engine refuses a path without a seed, and the attribute
+                // refuses its own combination — but neither sees this one: the
+                // adapter draws a random seed for an unseeded property, so the
+                // engine is handed a seed and says nothing while the path
+                // replays a descent of a run that never happened. The path is
+                // always copied from a message that printed the seed beside it.
+                throw new \InvalidArgumentException(
+                    'PROPERTY_PATH replays one recorded descent and needs the seed it was recorded with; set PROPERTY_SEED too',
+                );
+            }
 
             $definition = new PropertyDefinition(
                 id: $reflection->getDeclaringClass()->getName() . '::' . $reflection->getName(),
@@ -124,7 +137,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 ),
                 config: new PropertyConfig(
                     runs: EnvironmentOverrides::runs(getenv('PROPERTY_RUNS')) ?? $property->runs,
-                    seed: $this->resolveSeed($property->seed, $derandomize),
+                    seed: $this->resolveSeed($pinnedSeed, $derandomize),
                     maxShrinks: $property->maxShrinks,
                     maxDiscards: $property->maxDiscards,
                     timeoutMs: $property->timeoutMs,
@@ -138,7 +151,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                     // the attribute wrote down.
                     phases: EnvironmentOverrides::phases(getenv('PROPERTY_PHASES')) ?? $property->phases,
                     derandomize: $derandomize,
-                    path: $property->path ?? EnvironmentOverrides::string(getenv('PROPERTY_PATH')),
+                    path: $path,
                     edgeCases: EnvironmentOverrides::edgeCases(getenv('PROPERTY_EDGE_CASES')) ?? $property->edgeCases,
                 ),
                 examples: $this->resolveExamples($reflection, $info, $property),
@@ -153,6 +166,18 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             // by its message — not an aborted pipeline with the reason buried
             // in a previous exception.
             return new TestResult(info: $info, status: Status::Error, failure: $misconfiguration);
+        } catch (\TypeError|\ValueError $misconfiguration) {
+            // The engine's own refusals are InvalidArgumentException, but PHP
+            // raises these two for the same class of mistake: an attribute
+            // argument of the wrong shape (`generators: [Provider::class,
+            // 'missingMethod']` is not a callable), a provider closure bound to
+            // nothing. Left uncaught they escape the pipeline and come back as
+            // Status::Aborted with "Error during test execution pipeline." on
+            // top and the real reason buried in `previous`.
+            return new TestResult(info: $info, status: Status::Error, failure: new \InvalidArgumentException(
+                sprintf('#[Property] on "%s" cannot be set up: %s', $info->name, $misconfiguration->getMessage()),
+                previous: $misconfiguration,
+            ));
         }
 
         $listeners = $this->listeners;
@@ -232,16 +257,10 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
      * whole suite (handy for replaying a CI failure); otherwise a random seed is
      * drawn.
      */
-    private function resolveSeed(?int $attributeSeed, bool $derandomize): ?int
+    private function resolveSeed(?int $pinnedSeed, bool $derandomize): ?int
     {
-        if ($attributeSeed !== null) {
-            return $attributeSeed;
-        }
-
-        $seed = EnvironmentOverrides::seed(getenv('PROPERTY_SEED'));
-
-        if ($seed !== null) {
-            return $seed;
+        if ($pinnedSeed !== null) {
+            return $pinnedSeed;
         }
 
         // Unseeded: the adapter normally draws the seed so the value is
@@ -406,9 +425,28 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         if ($class->hasMethod($provider)) {
             $method = $class->getMethod($provider);
 
-            return $method->isStatic()
-                ? $method->getClosure()
-                : $method->getClosure($info->caseInfo->instance?->getInstance());
+            if ($method->isStatic()) {
+                return $method->getClosure();
+            }
+
+            // Not gated on hasInstance(): the case instance is created lazily,
+            // so asking that first would refuse the very fixture this branch
+            // exists for. Only the absence of a provider is the mistake.
+            $instance = $info->caseInfo->instance?->getInstance();
+
+            if ($instance === null) {
+                // getClosure(null) on an instance method is a ValueError, which
+                // reads as an internal failure. Name what is wrong instead: the
+                // provider has to be static unless the case is instantiated.
+                throw new \InvalidArgumentException(sprintf(
+                    'Property "%s" references %s provider "%s", which is not static and has no test-case instance to run on; make it static',
+                    $testMethod->getName(),
+                    $kind,
+                    $provider,
+                ));
+            }
+
+            return $method->getClosure($instance);
         }
 
         if (is_callable($provider)) {

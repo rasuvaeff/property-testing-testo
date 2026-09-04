@@ -102,7 +102,7 @@ environment). The table must stay verbatim-equivalent to what
 | `PROPERTY_DB` | Always (`false`/`''` = off, nothing written) | Directory path (created on demand) **or** `redis://host[:port][/db][?prefix=key-prefix]` (`rediss://` = TLS; core `CorpusFactory`) | Regression corpus via `CorpusFromEnv::resolve()`: a path builds a `FilesystemCorpus`, a DSN a `RedisCorpus` (ext-redis preferred, else predis). An attribute `seed` disables replay for that property | `InvalidArgumentException` — an unusable DSN, or no Redis client installed. Never a silent fall back to the filesystem |
 | `PROPERTY_PHASES` | Always (`false`/`''` = unset) | Comma-separated phase names, case-insensitive: `examples`, `corpus`, `random`, `shrink` | Stages of every run, in run order — **overrides** the attribute | `InvalidArgumentException` naming the accepted values |
 | `PROPERTY_DERANDOMIZE` | Always | Any value except `''` and `'0'` enables | Derives every unset seed from the property id — **overrides** the attribute | n/a (falsy values disable) |
-| `PROPERTY_PATH` | Only when the attribute omits `path` | A recorded `CounterExample::$path` | Replays that shrink descent instead of searching for it; needs the seed of the run that produced it | engine rejects a path that would be a silent no-op |
+| `PROPERTY_PATH` | Only when the attribute omits `path` | A recorded `CounterExample::$path` | Replays that shrink descent instead of searching for it; needs the seed of the run that produced it | adapter rejects a path with no pinned seed — the engine cannot, because the adapter has already drawn a random one for it |
 | `PROPERTY_EDGE_CASES` | Always (`false`/`''` = unset) | `mixin` or `none`, case-insensitive, trimmed | Numeric boundary bias for every run — **overrides** the attribute | `InvalidArgumentException` naming the accepted values |
 
 The split is deliberate and worth stating: **the environment dials the suite,
@@ -146,12 +146,23 @@ replay (`PropertyDefinition::$replayRegressions = false`), the **env**
 
 - **Aggregate results must carry per-run `TestResult` attributes.** Downstream
   interceptors attach per-run attributes to each `$next()` result — Testo
-  codecov's `CoverageResult` among them (its interceptor is innermost, order
-  `PHP_INT_MAX`). `TestoTrialExecutor` merges every executed run's attributes
+  codecov's `CoverageResult` among them (`InterceptorOptions::ORDER_COVERAGE`,
+  well inside this interceptor's `ORDER_CLOSE_TO_TEST`; the innermost of all is
+  the lifecycle interceptor at `PHP_INT_MAX`, which is why a hook runs inside
+  `$next()` on every trial). `TestoTrialExecutor` merges every executed run's attributes
   (last write per key wins) and the interceptor puts that aggregate on the one
   `TestResult` it returns. Dropping that merge makes property tests vanish
   from per-test coverage, and Infection then never runs them against mutants.
   The merge covers shrink trials and passing examples too.
+- **A skip from a lifecycle hook arrives as a throw, not as a status.** The
+  lifecycle interceptor is innermost (`PHP_INT_MAX`), so it runs `#[BeforeTest]`
+  inside `$next()` and lets a `SkipTest` travel outward; only a skip from the
+  *body* reaches the terminal handler that turns it into `Status::Skipped`.
+  `TestoTrialExecutor` therefore catches `SkipTest`/`CancelTest` itself and
+  folds them into the same discard-and-remember path as the status. Folded into
+  a failure instead, the engine falsified the property and shrank around the
+  skip, re-running the hook on every trial — while `README.md` promises a skip
+  from the body *or a hook* skips the run.
 - **`VerboseListener` is exception-hardened by design.** User listeners abort
   the run on exception (engine policy); the built-in verbose output swallows
   its own errors so a trace bug cannot fail every `PROPERTY_VERBOSE` consumer.

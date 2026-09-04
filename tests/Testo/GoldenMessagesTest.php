@@ -13,6 +13,7 @@ use Rasuvaeff\PropertyTesting\CoverageViolationException;
 use Rasuvaeff\PropertyTesting\DeadlineExceededException;
 use Rasuvaeff\PropertyTesting\ExampleViolationException;
 use Rasuvaeff\PropertyTesting\GaveUpException;
+use Rasuvaeff\PropertyTesting\Gen;
 use Rasuvaeff\PropertyTesting\GenerationExhausted;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Rasuvaeff\PropertyTesting\RegressionViolationException;
@@ -21,6 +22,7 @@ use Rasuvaeff\PropertyTesting\Runner\PropertyRunner;
 use Rasuvaeff\PropertyTesting\Testo\PropertyInterceptor;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Support\Env;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Support\FakeClock;
+use Rasuvaeff\PropertyTesting\Testo\VerboseListener;
 use Rasuvaeff\PropertyTesting\TimeBudgetExceededException;
 use Testo\Application\Internal\MessengerHub;
 use Testo\Assert;
@@ -53,6 +55,7 @@ use Testo\Test;
  */
 #[Test]
 #[Covers(PropertyInterceptor::class)]
+#[Covers(VerboseListener::class)]
 #[Covers(PropertyRunner::class)]
 #[Covers(PropertyViolationException::class)]
 #[Covers(ExampleViolationException::class)]
@@ -248,6 +251,63 @@ final class GoldenMessagesTest
             $restoreEnv();
             array_map(unlink(...), array_merge(glob($dir . '/*.json') ?: [], glob($dir . '/*.lock') ?: [], glob($dir . '/.corpus.lock') ?: []));
             rmdir($dir);
+        }
+    }
+
+    public function verboseAttemptAndShrinkLines(): void
+    {
+        // PROPERTY_VERBOSE is the package's other human-facing output, and its
+        // line formats are pinned here — as whole lines, so a moved quote or a
+        // reordered segment fails rather than a `contains()` of the middle.
+        $restoreEnv = Env::set('PROPERTY_VERBOSE', '1');
+
+        try {
+            $messenger = $this->createMessenger();
+            $result = (new PropertyInterceptor($messenger))
+                ->runTest($this->info(FalsifyingStub::class, 'check'), $this->failAboveFifty());
+
+            Assert::instanceOf($result->failure, PropertyViolationException::class);
+
+            $lines = array_map(
+                static fn(object $message): string => (string) $message->content,
+                $messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT),
+            );
+
+            Assert::same(count($lines), 2);
+            Assert::same($lines[0], 'Property "check" attempt 1: x=100');
+            Assert::same($lines[1], 'Property "check" shrink step 1: x=100 -> 51');
+        } finally {
+            $restoreEnv();
+        }
+    }
+
+    public function verboseDrawsLine(): void
+    {
+        // A run that draws nothing prints no draws line at all, so nothing else
+        // pins this one.
+        $restoreEnv = Env::set('PROPERTY_VERBOSE', '1');
+
+        try {
+            $messenger = $this->createMessenger();
+            (new PropertyInterceptor($messenger))->runTest(
+                $this->info(DrawGoldenStub::class, 'check'),
+                static function (TestInfo $info): TestResult {
+                    Gen::draw(Gen::intBetween(7, 7));
+
+                    return new TestResult(info: $info, status: Status::Passed);
+                },
+            );
+
+            $lines = array_map(
+                static fn(object $message): string => (string) $message->content,
+                $messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT),
+            );
+
+            Assert::same(count($lines), 2);
+            Assert::same($lines[0], 'Property "check" attempt 1: x=10');
+            Assert::same($lines[1], 'Property "check" attempt 1 draws: draw#1=7');
+        } finally {
+            $restoreEnv();
         }
     }
 
