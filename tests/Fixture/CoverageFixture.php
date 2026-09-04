@@ -25,8 +25,14 @@ final class CoverageFixture
         Assert::true($x <= 10);
     }
 
-    /** @return array<string, ArbitraryInterface> */
-    private function ints(): array
+    /**
+     * Public but not static on purpose: this is the one fixture covering the
+     * instance-method form of a generators provider, which the interceptor
+     * binds to the running case instance. Everywhere else, prefer static.
+     *
+     * @return array<string, ArbitraryInterface>
+     */
+    public function ints(): array
     {
         return ['x' => Gen::intBetween(1, 10)];
     }

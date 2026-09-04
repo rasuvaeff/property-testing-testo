@@ -56,7 +56,7 @@ mixed installation rather than let two copies of the namespace collide.
 ## Requirements
 
 - PHP 8.3+
-- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^0.5 || ^0.6`
+- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^0.5 || ^0.6 || ^0.7`
 - [`testo/testo`](https://packagist.org/packages/testo/testo) `^0.10.39 || ^1.0`
 
 ## Installation

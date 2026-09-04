@@ -21,7 +21,7 @@ final class ExhaustedFixture
     public function neverGetsAValue(int $x): void {}
 
     /** @return array<string, ArbitraryInterface> */
-    private function impossible(): array
+    public static function impossible(): array
     {
         return ['x' => Gen::filter(Gen::intBetween(1, 10), static fn(int $n): bool => $n > 10)];
     }

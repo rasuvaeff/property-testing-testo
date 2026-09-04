@@ -41,6 +41,8 @@ use Testo\Core\Context\TestResult;
 use Testo\Core\Definition\CaseDefinition;
 use Testo\Core\Definition\TestDefinition;
 use Testo\Core\Value\Status;
+use Testo\Lifecycle\AfterTest;
+use Testo\Lifecycle\BeforeTest;
 use Testo\Test;
 
 /**
@@ -57,6 +59,28 @@ use Testo\Test;
 #[Covers(PropertyRunner::class)]
 final class EventOrderTest
 {
+    /** @var \Closure(): void */
+    private \Closure $restoreCorpusEnv;
+
+    /**
+     * A `PROPERTY_DB` exported by the developer or the CI job would otherwise
+     * reach every test here: the interceptor would replay and record a corpus
+     * the assertions know nothing about, turning a falsification into a
+     * `RegressionViolationException` and adding corpus events to the pinned
+     * event order. Tests that want a corpus set it themselves, after this.
+     */
+    #[BeforeTest]
+    public function isolateFromAnAmbientCorpus(): void
+    {
+        $this->restoreCorpusEnv = Env::set('PROPERTY_DB', null);
+    }
+
+    #[AfterTest]
+    public function restoreTheAmbientCorpus(): void
+    {
+        ($this->restoreCorpusEnv)();
+    }
+
     public function passingPropertyEmitsStartRunPairsFinish(): void
     {
         $listener = new CollectingListener();

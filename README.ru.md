@@ -55,7 +55,7 @@ composer require --dev rasuvaeff/property-testing-testo
 ## Требования
 
 - PHP 8.3+
-- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^0.5 || ^0.6`
+- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^0.5 || ^0.6 || ^0.7`
 - [`testo/testo`](https://packagist.org/packages/testo/testo) `^0.10.39 || ^1.0`
 
 ## Установка
@@ -317,6 +317,7 @@ TLS. Форма до 0.7 с префиксом в пути (`redis://host/suite-
 именем схемы. Учётные данные в DSN (`redis://user:pass@host`) отклоняются, а не
 молча отбрасываются; настраивайте Redis AUTH отдельно.
 
+#### Как записи попадают в корпус
 
 Задайте `PROPERTY_DB`, и каждое фальсифицированное свойство запишет туда своё
 падение. При следующем прогоне записанные падения реплеятся **первыми** (если

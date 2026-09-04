@@ -7,8 +7,11 @@ namespace Rasuvaeff\PropertyTesting\Testo\Tests;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Rasuvaeff\PropertyTesting\StateMachine\CommandSequence;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\StatefulPropertyFixture;
+use Rasuvaeff\PropertyTesting\Testo\Tests\Support\Env;
 use Testo\Assert;
 use Testo\Codecov\CoversNothing;
+use Testo\Lifecycle\AfterTest;
+use Testo\Lifecycle\BeforeTest;
 use Testo\Test;
 use Testo\Testing\Attribute\TestingSuite;
 use Testo\Testing\Helper\TestRunner;
@@ -24,6 +27,28 @@ use Testo\Testing\Helper\TestRunner;
 #[TestingSuite(path: __DIR__ . '/../Fixture')]
 final class StatefulE2ETest
 {
+    /** @var \Closure(): void */
+    private \Closure $restoreCorpusEnv;
+
+    /**
+     * A `PROPERTY_DB` exported by the developer or the CI job would otherwise
+     * reach every test here: the interceptor would replay and record a corpus
+     * the assertions know nothing about, turning a falsification into a
+     * `RegressionViolationException` and adding corpus events to the pinned
+     * event order. Tests that want a corpus set it themselves, after this.
+     */
+    #[BeforeTest]
+    public function isolateFromAnAmbientCorpus(): void
+    {
+        $this->restoreCorpusEnv = Env::set('PROPERTY_DB', null);
+    }
+
+    #[AfterTest]
+    public function restoreTheAmbientCorpus(): void
+    {
+        ($this->restoreCorpusEnv)();
+    }
+
     public function falsifiesAndShrinksACommandSequence(): void
     {
         $result = TestRunner::runTest([StatefulPropertyFixture::class, 'buggyStackPreservesLifoOrder']);

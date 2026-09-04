@@ -12,7 +12,7 @@ use Testo\Test;
 
 /**
  * Fixture executed through the real Testo runner by
- * {@see \Rasuvaeff\PropertyTesting\Tests\PropertyRunnerE2ETest}: an in-body
+ * {@see \Rasuvaeff\PropertyTesting\Testo\Tests\PropertyRunnerE2ETest}: an in-body
  * draw whose domain depends on the generated parameter. The property fails
  * for any drawn index above 3, so the counterexample must shrink both the
  * parameter (to its lower bound) and the drawn value (to 4).
@@ -29,7 +29,7 @@ final class DrawPropertyFixture
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function sizes(): array
+    public static function sizes(): array
     {
         return ['size' => Gen::intBetween(10, 50)];
     }
