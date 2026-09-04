@@ -154,7 +154,9 @@ What the adapter does and does not combine with:
   failure. Assert on exceptions inside the body instead.
 - **A `SkipTest` thrown from the body or a hook skips the run**; when every
   run skipped, the property is reported as a skipped test. Partly skipped runs
-  are discards and count against `maxDiscards`.
+  are discards and count against `maxDiscards`. Unlike an `Assume::that()`
+  discard, a skip says nothing about the input, so a recorded regression whose
+  replay only skipped stays in the corpus instead of being pruned.
 
 ### Callable providers
 
