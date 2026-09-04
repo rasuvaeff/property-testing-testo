@@ -10,6 +10,8 @@ use Rasuvaeff\PropertyTesting\Runner\TrialOutcome;
 use Testo\Codecov\Result\CoverageResult;
 use Testo\Core\Context\TestInfo;
 use Testo\Core\Context\TestResult;
+use Testo\Core\Exception\CancelTest;
+use Testo\Core\Exception\SkipTest;
 use Testo\Core\Value\Status;
 
 /**
@@ -59,12 +61,24 @@ final class TestoTrialExecutor implements TrialExecutor
 
         try {
             $result = ($this->next)($this->info->with(arguments: array_values($arguments)));
+        } catch (AssumptionSkipped) {
+            return TrialOutcome::discarded();
+        } catch (SkipTest|CancelTest $skip) {
+            // A skip raised from a lifecycle hook — `#[BeforeTest]` guarding a
+            // missing dependency is the common case — never reaches the
+            // terminal handler that turns a skip from the *body* into a
+            // Status::Skipped result: the lifecycle interceptor runs the hooks
+            // inside this closure and lets the throw travel. Folded into a
+            // failure it falsified the property and shrank around the skip,
+            // re-running the hook on every trial, while README promises a skip
+            // from the body *or a hook* skips the run.
+            return $this->skip($skip);
         } catch (\Throwable $failure) {
             // The pipeline below (a lifecycle hook, a downstream interceptor)
             // threw instead of reporting: that is this run's failure, and it
             // must reach the engine as one — escaping here would abort the
             // whole property with no counterexample.
-            return $failure instanceof AssumptionSkipped ? TrialOutcome::discarded() : TrialOutcome::failed($failure);
+            return TrialOutcome::failed($failure);
         }
 
         foreach (array_keys($result->attributes) as $key) {
@@ -80,10 +94,7 @@ final class TestoTrialExecutor implements TrialExecutor
             // would report a green property that checked no input. It is a
             // discard — and remembered, so a property whose every run skipped
             // is reported as skipped rather than as one that gave up.
-            ++$this->skipped;
-            $this->firstSkip ??= $result->failure;
-
-            return TrialOutcome::discarded();
+            return $this->skip($result->failure);
         }
 
         if ($result->status->isSuccessful()) {
@@ -96,6 +107,19 @@ final class TestoTrialExecutor implements TrialExecutor
             'The run ended with status %s and no failure attached',
             $result->status->name,
         )));
+    }
+
+    /**
+     * Records one skipped run — from the body, where the terminal handler
+     * reports it as a status, or from a hook, where it arrives as a throw —
+     * and reports it to the engine as a discard.
+     */
+    private function skip(?\Throwable $reported): TrialOutcome
+    {
+        ++$this->skipped;
+        $this->firstSkip ??= $reported;
+
+        return TrialOutcome::discarded();
     }
 
     /**

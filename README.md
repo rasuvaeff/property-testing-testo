@@ -288,7 +288,7 @@ what the attribute wrote down.
 | `PROPERTY_DB` | Directory path enabling the regression corpus, or a `redis://host[:port][/db][?prefix=key-prefix]` DSN (`rediss://` for TLS) for a corpus shared between CI and developers. Unset means off, nothing is written |
 | `PROPERTY_PHASES` | Comma-separated stage list (`examples,corpus,random,shrink`, case-insensitive) that overrides the attribute — an unknown name throws rather than skipping a stage. `examples,corpus` is the fast pull-request gate |
 | `PROPERTY_DERANDOMIZE` | Any value except `''`/`'0'` derives every unset seed from the property id, making a whole suite reproducible without editing it |
-| `PROPERTY_PATH` | A recorded shrink descent replayed instead of searched for. Needs the seed that produced it; an attribute `path` wins. It describes one failure, so run it with a filter on that one test — every other property would report the path as stale |
+| `PROPERTY_PATH` | A recorded shrink descent replayed instead of searched for. **Requires a pinned seed** — `PROPERTY_SEED` or the attribute's — and is refused without one, because an unseeded property gets a random seed and the path would replay a run that never happened. An attribute `path` wins. It describes one failure, so run it with a filter on that one test — every other property would report the path as stale |
 | `PROPERTY_EDGE_CASES` | `mixin` or `none` (case-insensitive) — the numeric boundary bias for the whole suite, overriding the attribute. An unknown value throws |
 
 ### Regression corpus
