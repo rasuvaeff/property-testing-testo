@@ -23,7 +23,7 @@ final class DeadlineFixture
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function ints(): array
+    public static function ints(): array
     {
         return ['x' => Gen::intBetween(1, 10)];
     }

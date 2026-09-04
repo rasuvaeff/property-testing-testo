@@ -12,7 +12,7 @@ use Testo\Test;
 
 /**
  * Fixture executed through the real Testo runner by
- * {@see \Rasuvaeff\PropertyTesting\Tests\PropertyRunnerE2ETest}.
+ * {@see \Rasuvaeff\PropertyTesting\Testo\Tests\PropertyRunnerE2ETest}.
  *
  * It lives under tests/Fixture and is excluded from the Unit suite (see
  * testo.php) because its #[Property] method fails on purpose: the Unit suite
@@ -29,7 +29,7 @@ final class FalsifyingPropertyFixture
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function ints(): array
+    public static function ints(): array
     {
         return ['x' => Gen::intBetween(51, 100)];
     }

@@ -43,6 +43,8 @@ use Testo\Core\Definition\TestDefinition;
 use Testo\Core\Exception\SkipTest;
 use Testo\Core\Log\Message;
 use Testo\Core\Value\Status;
+use Testo\Lifecycle\AfterTest;
+use Testo\Lifecycle\BeforeTest;
 use Testo\Test;
 
 #[Test]
@@ -55,6 +57,28 @@ use Testo\Test;
 #[Covers(CoverageViolationException::class)]
 final class PropertyInterceptorTest
 {
+    /** @var \Closure(): void */
+    private \Closure $restoreCorpusEnv;
+
+    /**
+     * A `PROPERTY_DB` exported by the developer or the CI job would otherwise
+     * reach every test here: the interceptor would replay and record a corpus
+     * the assertions know nothing about, turning a falsification into a
+     * `RegressionViolationException` and adding corpus events to the pinned
+     * event order. Tests that want a corpus set it themselves, after this.
+     */
+    #[BeforeTest]
+    public function isolateFromAnAmbientCorpus(): void
+    {
+        $this->restoreCorpusEnv = Env::set('PROPERTY_DB', null);
+    }
+
+    #[AfterTest]
+    public function restoreTheAmbientCorpus(): void
+    {
+        ($this->restoreCorpusEnv)();
+    }
+
     public function passesEveryRunAndReportsPassed(): void
     {
         $interceptor = new PropertyInterceptor($this->createMessenger());
@@ -1424,6 +1448,37 @@ final class PropertyInterceptorTest
             Assert::same(count($trace), $steps);
             Assert::string($trace[0]->content)->contains('shrink step 1: x=');
             Assert::string($trace[$steps - 1]->content)->contains('-> 51');
+        } finally {
+            $restoreEnv();
+        }
+    }
+
+    public function verboseLogsTheInBodyDrawsOfEveryRun(): void
+    {
+        // The draws line is its own branch of the verbose trace: a run that drew
+        // nothing prints only its arguments, so nothing else pins this format.
+        $restoreEnv = Env::set('PROPERTY_VERBOSE', '1');
+
+        try {
+            $messenger = $this->createMessenger();
+            $interceptor = new PropertyInterceptor($messenger);
+            $next = static function (TestInfo $info): TestResult {
+                Gen::draw(Gen::intBetween(7, 7));
+
+                return new TestResult(info: $info, status: Status::Passed);
+            };
+
+            // PassingStub runs 5 times, and each run draws exactly once.
+            $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
+
+            $trace = array_values(array_filter(
+                $messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT),
+                static fn(Message $message): bool => str_contains($message->content, 'draws:'),
+            ));
+
+            Assert::same(count($trace), 5);
+            Assert::string($trace[0]->content)->contains('attempt 1 draws: draw#1=7');
+            Assert::string($trace[4]->content)->contains('attempt 5 draws: draw#1=7');
         } finally {
             $restoreEnv();
         }

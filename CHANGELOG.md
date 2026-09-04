@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Allows `rasuvaeff/property-testing-core` `^0.7`.
+- Tests are isolated from a `PROPERTY_DB` exported for the whole run: the suite
+  no longer replays or records an ambient corpus behind the assertions.
+
 ## 0.7.2 — 2026-09-03
 
 - Repair the interceptor benchmark fixture so it runs through a configured

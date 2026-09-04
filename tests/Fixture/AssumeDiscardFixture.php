@@ -13,7 +13,7 @@ use Testo\Test;
 
 /**
  * Fixture executed through the real Testo runner by
- * {@see \Rasuvaeff\PropertyTesting\Tests\PropertyRunnerE2ETest}.
+ * {@see \Rasuvaeff\PropertyTesting\Testo\Tests\PropertyRunnerE2ETest}.
  *
  * The property holds only for positive draws; non-positive ones are discarded
  * via {@see Assume::that()}, so the test passes. Excluded from the Unit suite
@@ -31,7 +31,7 @@ final class AssumeDiscardFixture
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function ints(): array
+    public static function ints(): array
     {
         return ['x' => Gen::intBetween(-50, 50)];
     }

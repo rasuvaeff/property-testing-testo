@@ -32,7 +32,7 @@ final class StatefulPropertyFixture
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function stackCommands(): array
+    public static function stackCommands(): array
     {
         return [
             'sequence' => Gen::commands([], [

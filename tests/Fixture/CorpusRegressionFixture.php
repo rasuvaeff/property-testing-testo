@@ -28,7 +28,7 @@ final class CorpusRegressionFixture
     }
 
     /** @return array<string, ArbitraryInterface> */
-    private function ints(): array
+    public static function ints(): array
     {
         return ['x' => Gen::intBetween(51, 100)];
     }

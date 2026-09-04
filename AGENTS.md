@@ -112,6 +112,24 @@ the attribute pins the property.** `PROPERTY_RUNS`, `PROPERTY_PHASES` and
 same table, with the same messages, is the PHPUnit adapter's — parity is a
 golden rule, and these three were added to both in the same wave.
 
+**Why this suite has no regression corpus in CI.** The monorepo rule wires
+`PROPERTY_DB` plus a cache restore/save pair into `build.yml` for every package
+that consumes a `rasuvaeff/property-testing-*` adapter. This package is the
+adapter, and its Unit suite holds no `#[Property]` method of its own: the
+`#[Property]` fixtures under `tests/Fixture` are executed in nested
+applications, and the tests that exercise the corpus point `PROPERTY_DB` at
+their own temporary directory. A workflow-level `PROPERTY_DB` would record
+nothing and would reach every other test — a falsification would come back as a
+`RegressionViolationException` and the pinned event orders would grow corpus
+events. The lifecycle hooks that unset `PROPERTY_DB` per test keep the suite
+hermetic against a developer who exported one; do not add the CI steps on top.
+
+**Diagnostics print in a fixed order: the discard warning first, then the
+distribution.** Both adapters emit the same two lines for the same run, and a
+log that merges the two streams must not show them in different orders. The
+order is pinned here and in the PHPUnit adapter's `AGENTS.md`; changing it means
+changing both.
+
 One asymmetry the code makes explicit: this adapter normally draws the seed
 itself, so `PropertyConfig::$seed` is never null — except under
 derandomization, where it must be, because deriving a seed from the property
