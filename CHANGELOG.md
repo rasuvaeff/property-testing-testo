@@ -11,9 +11,11 @@
   which is when `Classify::when()` and `Classify::label()` are read at all. The
   level stays `Info`; only the channel decides visibility. The PHPUnit adapter
   already printed both lines unconditionally.
-- Accepts `rasuvaeff/property-testing-core` `^0.9`, where an environmental skip
+- Requires `rasuvaeff/property-testing-core` `^0.9`, where an environmental skip
   no longer spends the discard budget: a machine missing a dependency is no
-  longer told to narrow generators that were never at fault.
+  longer told to narrow generators that were never at fault. The excessive-
+  discard warning printed here reads the engine's discard counter, so it stops
+  firing on such a machine without a change of its own.
 
 ## 0.8.0 — 2026-09-04
 
