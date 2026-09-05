@@ -55,4 +55,31 @@ final class Env
             }
         };
     }
+
+    /**
+     * Clears every `PROPERTY_*` variable the interceptor reads, and returns the
+     * undo.
+     *
+     * The suite asserts on seeds, run counts, event orders and printed
+     * messages, so any of these exported in the shell rewrites what it is
+     * asserting against — `PROPERTY_RUNS=7` alone reddened 76 tests. CI never
+     * sees it (nothing exports them there); a developer reproducing a failure
+     * across the monorepo with `PROPERTY_SEED` exported does, and gets red
+     * tests with no hint that the environment is to blame.
+     *
+     * @return \Closure(): void
+     */
+    public static function isolateProperty(): \Closure
+    {
+        return self::setMany([
+            'PROPERTY_RUNS' => null,
+            'PROPERTY_SEED' => null,
+            'PROPERTY_VERBOSE' => null,
+            'PROPERTY_DB' => null,
+            'PROPERTY_PHASES' => null,
+            'PROPERTY_DERANDOMIZE' => null,
+            'PROPERTY_PATH' => null,
+            'PROPERTY_EDGE_CASES' => null,
+        ]);
+    }
 }

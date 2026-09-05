@@ -488,8 +488,16 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             );
         }
 
+        // The same channel as the discard warning, and for the same reason:
+        // Testo's terminal renderer writes CHANNEL_STDERR through as-is, while
+        // every other channel streams only at Verbosity::Verbose — rescued at
+        // normal verbosity solely when the whole run holds one passing test.
+        // Classify::when() and label() exist to make the distribution visible
+        // while debugging, and debugging happens on the red run, which is
+        // exactly where it used to disappear. The level stays Info: the line
+        // is not a warning, and only the channel decides visibility.
         $this->messenger->log(
-            Messenger::CHANNEL_STDOUT,
+            Messenger::CHANNEL_STDERR,
             sprintf('Property "%s" distribution: %s', $name, implode(', ', $parts)),
             Level::Info,
         );
