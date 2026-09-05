@@ -34,6 +34,7 @@ use Testo\Core\Context\TestInfo;
 use Testo\Core\Context\TestResult;
 use Testo\Core\Definition\CaseDefinition;
 use Testo\Core\Definition\TestDefinition;
+use Testo\Core\Log\Level;
 use Testo\Core\Value\Status;
 use Testo\Lifecycle\AfterTest;
 use Testo\Lifecycle\BeforeTest;
@@ -70,16 +71,19 @@ final class GoldenMessagesTest
     private \Closure $restoreCorpusEnv;
 
     /**
-     * A `PROPERTY_DB` exported by the developer or the CI job would otherwise
-     * reach every test here: the interceptor would replay and record a corpus
-     * the assertions know nothing about, turning a falsification into a
-     * `RegressionViolationException` and adding corpus events to the pinned
-     * event order. Tests that want a corpus set it themselves, after this.
+     * Any `PROPERTY_*` exported by the developer or the CI job would otherwise
+     * reach every test here, and each of them rewrites something this suite
+     * asserts on: `PROPERTY_DB` makes the interceptor replay and record a
+     * corpus the assertions know nothing about (a falsification becomes a
+     * `RegressionViolationException`, and corpus events join the pinned event
+     * order), while `PROPERTY_RUNS`, `PROPERTY_SEED`, `PROPERTY_EDGE_CASES`
+     * and the rest change the counts, seeds and messages being pinned. Tests
+     * that want one set it themselves, after this.
      */
     #[BeforeTest]
     public function isolateFromAnAmbientCorpus(): void
     {
-        $this->restoreCorpusEnv = Env::set('PROPERTY_DB', null);
+        $this->restoreCorpusEnv = Env::isolateProperty();
     }
 
     #[AfterTest]
@@ -174,9 +178,17 @@ final class GoldenMessagesTest
         $result = (new PropertyInterceptor($messenger))->runTest($this->info(PassingStub::class, 'check'), $next);
 
         Assert::same($result->status, Status::Passed);
-        $lines = $messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT);
+        // Reported on STDERR, like the discard warning: Testo's renderer writes
+        // that channel through as-is, while a STDOUT message is dropped at
+        // normal verbosity in any run that is not a single passing test — which
+        // hid the distribution from exactly the red run it is read on.
+        Assert::same(count($messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT)), 0);
+        $lines = $messenger->getMessages()->channel(Messenger::CHANNEL_STDERR);
         Assert::same(count($lines), 1);
         Assert::same($lines[0]->content, 'Property "check" distribution: small 100% (5/5)');
+        // Info, not Warning: a distribution is not a fault, and the level is
+        // metadata the terminal renderer does not read.
+        Assert::same($lines[0]->level, Level::Info);
     }
 
     /**

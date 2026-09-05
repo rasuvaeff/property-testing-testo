@@ -132,7 +132,8 @@ public static function additionCommutesExamples(): array
 - `PropertyInterceptor` — self-registering Testo interceptor; resolves
   reflection + env into a core `PropertyDefinition`, maps the structured
   `PropertyResult` to one Testo `TestResult`, prints the distribution report
-  and discard warning.
+  and discard warning (both on `Messenger::CHANNEL_STDERR` -- a STDOUT message
+  is dropped by Testo's renderer below `-v`).
 - `TestoTrialExecutor` — runs the body through Testo's pipeline; merges every
   run's `TestResult` attributes into the aggregate result.
 - `VerboseListener` — `PROPERTY_VERBOSE` output as an engine event listener;

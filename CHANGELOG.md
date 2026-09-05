@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.9.0 — 2026-09-05
+
+- The `Classify` distribution line is written to `Messenger::CHANNEL_STDERR`
+  instead of `CHANNEL_STDOUT`, so it survives a run that contains a failure.
+  Testo's terminal renderer writes the stderr channel through as-is and streams
+  every other channel only at `-v`, rescuing a stdout message at normal
+  verbosity solely when the whole run holds one passing test — so in a real
+  suite the distribution was never shown, and specifically not on the red run,
+  which is when `Classify::when()` and `Classify::label()` are read at all. The
+  level stays `Info`; only the channel decides visibility. The PHPUnit adapter
+  already printed both lines unconditionally.
+- Accepts `rasuvaeff/property-testing-core` `^0.9`, where an environmental skip
+  no longer spends the discard budget: a machine missing a dependency is no
+  longer told to narrow generators that were never at fault.
+
 ## 0.8.0 — 2026-09-04
 
 - A skipped run — from the body or from a lifecycle hook — is reported to the

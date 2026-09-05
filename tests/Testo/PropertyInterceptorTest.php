@@ -63,16 +63,19 @@ final class PropertyInterceptorTest
     private \Closure $restoreCorpusEnv;
 
     /**
-     * A `PROPERTY_DB` exported by the developer or the CI job would otherwise
-     * reach every test here: the interceptor would replay and record a corpus
-     * the assertions know nothing about, turning a falsification into a
-     * `RegressionViolationException` and adding corpus events to the pinned
-     * event order. Tests that want a corpus set it themselves, after this.
+     * Any `PROPERTY_*` exported by the developer or the CI job would otherwise
+     * reach every test here, and each of them rewrites something this suite
+     * asserts on: `PROPERTY_DB` makes the interceptor replay and record a
+     * corpus the assertions know nothing about (a falsification becomes a
+     * `RegressionViolationException`, and corpus events join the pinned event
+     * order), while `PROPERTY_RUNS`, `PROPERTY_SEED`, `PROPERTY_EDGE_CASES`
+     * and the rest change the counts, seeds and messages being pinned. Tests
+     * that want one set it themselves, after this.
      */
     #[BeforeTest]
     public function isolateFromAnAmbientCorpus(): void
     {
-        $this->restoreCorpusEnv = Env::set('PROPERTY_DB', null);
+        $this->restoreCorpusEnv = Env::isolateProperty();
     }
 
     #[AfterTest]
@@ -814,11 +817,17 @@ final class PropertyInterceptorTest
         Assert::same($result->failure, $skip);
     }
 
-    public function aPartlySkippedPropertyStillDiscardsTheSkippedRuns(): void
+    public function aPartlySkippedPropertyGivesUpOnTheSkipBudget(): void
     {
-        // Skipped on every run but one: the discards count, and the budget of
-        // DiscardBudgetStub is exhausted by four of them before the required
+        // Skipped on every run but one: not a skipped test, because one run
+        // checked. The skipped runs exhaust the budget before the required
         // checks are made — that is a give-up, not a skip.
+        //
+        // Which counter carries them is deliberately not asserted here while
+        // core 0.8 and 0.9 are both accepted: 0.8 counts a skip as a discard,
+        // 0.9 counts it apart and says so in the message. The assertion comes
+        // back, on `skippedRuns` and `exhaustedBySkips`, when the constraint
+        // narrows to ^0.9 (property-testing-core#114).
         $interceptor = new PropertyInterceptor($this->createMessenger());
         $calls = 0;
         $next = static function (TestInfo $info) use (&$calls): TestResult {
@@ -831,7 +840,8 @@ final class PropertyInterceptorTest
 
         Assert::same($result->status, Status::Failed);
         Assert::instanceOf($result->failure, GaveUpException::class);
-        Assert::same($result->failure->discardedRuns, 4);
+        Assert::same($result->failure->attempts, 5);
+        Assert::same($result->failure->successfulRuns, 1);
     }
 
     public function aRunThatEndsAbortedIsAFailureNotAPass(): void
@@ -900,10 +910,12 @@ final class PropertyInterceptorTest
         Assert::same($result->failure, $cancel);
     }
 
-    public function aHookThatSkipsOnlySomeRunsStillDiscardsThem(): void
+    public function aHookThatSkipsOnlySomeRunsGivesUpOnTheSkipBudget(): void
     {
         // Not every run skipped, so this is not a skipped test: the skipped
-        // runs are discards and DiscardBudgetStub's budget of 3 runs out.
+        // runs spend the budget, and DiscardBudgetStub's budget of 3 runs out.
+        // A hook's skip reaches the engine exactly like the body's; which
+        // counter carries them is left to the sibling test's note.
         $interceptor = new PropertyInterceptor($this->createMessenger());
         $calls = 0;
         $next = static function (TestInfo $info) use (&$calls): TestResult {
@@ -918,7 +930,8 @@ final class PropertyInterceptorTest
 
         Assert::same($result->status, Status::Failed);
         Assert::instanceOf($result->failure, GaveUpException::class);
-        Assert::same($result->failure->discardedRuns, 4);
+        Assert::same($result->failure->attempts, 5);
+        Assert::same($result->failure->successfulRuns, 1);
     }
 
     public function aHookThatThrowsIsTheRunsFailureNotAnAbortedProperty(): void
@@ -1454,8 +1467,12 @@ final class PropertyInterceptorTest
 
         // PassingStub runs 5 times; every run records 'checked'.
         $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
-        $messages = $messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT);
+        // STDERR, like the discard warning: Testo drops a STDOUT message below
+        // -v unless the whole run is one passing test, which hid the
+        // distribution from every real suite.
+        $messages = $messenger->getMessages()->channel(Messenger::CHANNEL_STDERR);
 
+        Assert::same(count($messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT)), 0);
         Assert::same(count($messages), 1);
         Assert::string($messages[0]->content)->contains('checked 100% (5/5)');
     }

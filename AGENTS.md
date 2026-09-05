@@ -51,7 +51,7 @@ inside the container:
 
 ```bash
 docker run --rm -v "$PWD":/repo -w /repo/property-testing-testo composer:2 sh -c '
-    composer config repositories.core "{\"type\":\"path\",\"url\":\"../property-testing-core\",\"options\":{\"versions\":{\"rasuvaeff/property-testing-core\":\"0.2.0\"}}}"
+    composer config repositories.core "{\"type\":\"path\",\"url\":\"../property-testing-core\",\"options\":{\"versions\":{\"rasuvaeff/property-testing-core\":\"0.9.0\"}}}"
     composer update
     composer config --unset repositories.core
     rm composer.lock
@@ -121,14 +121,25 @@ applications, and the tests that exercise the corpus point `PROPERTY_DB` at
 their own temporary directory. A workflow-level `PROPERTY_DB` would record
 nothing and would reach every other test — a falsification would come back as a
 `RegressionViolationException` and the pinned event orders would grow corpus
-events. The lifecycle hooks that unset `PROPERTY_DB` per test keep the suite
-hermetic against a developer who exported one; do not add the CI steps on top.
+events. The lifecycle hooks that call `Env::isolateProperty()` per test keep
+the suite hermetic against a developer who exported any `PROPERTY_*`; do not add
+the CI steps on top. Isolating only `PROPERTY_DB` is not enough — this suite
+asserts on seeds, run counts and printed messages, and an exported
+`PROPERTY_RUNS=7` alone reddened 76 tests with no hint of the cause.
 
 **Diagnostics print in a fixed order: the discard warning first, then the
 distribution.** Both adapters emit the same two lines for the same run, and a
 log that merges the two streams must not show them in different orders. The
 order is pinned here and in the PHPUnit adapter's `AGENTS.md`; changing it means
 changing both.
+
+**Both lines go to `Messenger::CHANNEL_STDERR`.** Testo's terminal renderer
+writes that channel through as-is; every other channel streams only at
+`Verbosity::Verbose`, rescued at normal verbosity solely when the whole run
+holds one passing test. The distribution used to go to `CHANNEL_STDOUT` and so
+vanished from any real suite — and specifically from the red run, which is when
+`Classify::when()` / `label()` are read. Do not move it back for the sake of a
+tidier stdout.
 
 One asymmetry the code makes explicit: this adapter normally draws the seed
 itself, so `PropertyConfig::$seed` is never null — except under

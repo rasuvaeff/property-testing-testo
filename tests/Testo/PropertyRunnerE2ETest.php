@@ -51,16 +51,19 @@ final class PropertyRunnerE2ETest
     private \Closure $restoreCorpusEnv;
 
     /**
-     * A `PROPERTY_DB` exported by the developer or the CI job would otherwise
-     * reach every test here: the interceptor would replay and record a corpus
-     * the assertions know nothing about, turning a falsification into a
-     * `RegressionViolationException` and adding corpus events to the pinned
-     * event order. Tests that want a corpus set it themselves, after this.
+     * Any `PROPERTY_*` exported by the developer or the CI job would otherwise
+     * reach every test here, and each of them rewrites something this suite
+     * asserts on: `PROPERTY_DB` makes the interceptor replay and record a
+     * corpus the assertions know nothing about (a falsification becomes a
+     * `RegressionViolationException`, and corpus events join the pinned event
+     * order), while `PROPERTY_RUNS`, `PROPERTY_SEED`, `PROPERTY_EDGE_CASES`
+     * and the rest change the counts, seeds and messages being pinned. Tests
+     * that want one set it themselves, after this.
      */
     #[BeforeTest]
     public function isolateFromAnAmbientCorpus(): void
     {
-        $this->restoreCorpusEnv = Env::set('PROPERTY_DB', null);
+        $this->restoreCorpusEnv = Env::isolateProperty();
     }
 
     #[AfterTest]
