@@ -820,14 +820,10 @@ final class PropertyInterceptorTest
     public function aPartlySkippedPropertyGivesUpOnTheSkipBudget(): void
     {
         // Skipped on every run but one: not a skipped test, because one run
-        // checked. The skipped runs exhaust the budget before the required
-        // checks are made — that is a give-up, not a skip.
-        //
-        // Which counter carries them is deliberately not asserted here while
-        // core 0.8 and 0.9 are both accepted: 0.8 counts a skip as a discard,
-        // 0.9 counts it apart and says so in the message. The assertion comes
-        // back, on `skippedRuns` and `exhaustedBySkips`, when the constraint
-        // narrows to ^0.9 (property-testing-core#114).
+        // checked. The skipped runs exhaust their own budget before the
+        // required checks are made — that is a give-up, not a skip, and since
+        // core 0.9 the counters say which budget it was, so the message can
+        // name the environment instead of advising narrower generators.
         $interceptor = new PropertyInterceptor($this->createMessenger());
         $calls = 0;
         $next = static function (TestInfo $info) use (&$calls): TestResult {
@@ -842,6 +838,9 @@ final class PropertyInterceptorTest
         Assert::instanceOf($result->failure, GaveUpException::class);
         Assert::same($result->failure->attempts, 5);
         Assert::same($result->failure->successfulRuns, 1);
+        Assert::same($result->failure->skippedRuns, 4);
+        Assert::same($result->failure->discardedRuns, 0);
+        Assert::true($result->failure->exhaustedBySkips);
     }
 
     public function aRunThatEndsAbortedIsAFailureNotAPass(): void
@@ -913,9 +912,9 @@ final class PropertyInterceptorTest
     public function aHookThatSkipsOnlySomeRunsGivesUpOnTheSkipBudget(): void
     {
         // Not every run skipped, so this is not a skipped test: the skipped
-        // runs spend the budget, and DiscardBudgetStub's budget of 3 runs out.
-        // A hook's skip reaches the engine exactly like the body's; which
-        // counter carries them is left to the sibling test's note.
+        // runs spend the skip budget, and DiscardBudgetStub's budget of 3 runs
+        // out. A hook's skip reaches the engine exactly like the body's, down
+        // to which counter carries it.
         $interceptor = new PropertyInterceptor($this->createMessenger());
         $calls = 0;
         $next = static function (TestInfo $info) use (&$calls): TestResult {
@@ -932,6 +931,9 @@ final class PropertyInterceptorTest
         Assert::instanceOf($result->failure, GaveUpException::class);
         Assert::same($result->failure->attempts, 5);
         Assert::same($result->failure->successfulRuns, 1);
+        Assert::same($result->failure->skippedRuns, 4);
+        Assert::same($result->failure->discardedRuns, 0);
+        Assert::true($result->failure->exhaustedBySkips);
     }
 
     public function aHookThatThrowsIsTheRunsFailureNotAnAbortedProperty(): void
