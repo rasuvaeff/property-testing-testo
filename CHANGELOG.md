@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- `composer rector` is green again: the anonymous `CaseInstance` stub in the
+  interceptor's suite is a `readonly` class, as `ReadOnlyAnonymousClassRector`
+  asks. It had been red since the stub was introduced, which is `composer
+  release-check` red — `composer build` does not run rector.
+- Three characterizations resolve the engine's own spelling instead of pinning
+  the one core 0.9 uses, so they stay exact while this package's constraint
+  spans two core lines: the exception a bounded-attempt generator gives up with
+  (`GenerationExhausted` in 0.9, `GenerationExhaustedException` from 0.10) and
+  the counterexample field counting `Assume::that()` discards (`skips` in 0.9,
+  `discards` from 0.10, where `skips` becomes the environmental count). The new
+  `Tests\Support\CoreCompat` provokes the exception rather than naming it — a
+  literal for either spelling is a reference to a class the other engine does
+  not have — and reads the field through `CounterExample::toArray()`. It is
+  temporary by construction and goes away when the constraint narrows again.
+
 ## 0.9.0 — 2026-09-05
 
 - The `Classify` distribution line is written to `Messenger::CHANNEL_STDERR`
