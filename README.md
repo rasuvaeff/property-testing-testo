@@ -56,7 +56,7 @@ mixed installation rather than let two copies of the namespace collide.
 ## Requirements
 
 - PHP 8.3+
-- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^0.9`
+- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^0.9 || ^0.10`
 - [`testo/testo`](https://packagist.org/packages/testo/testo) `^0.10.39 || ^1.0`
 
 ## Installation
@@ -154,9 +154,12 @@ What the adapter does and does not combine with:
   failure. Assert on exceptions inside the body instead.
 - **A `SkipTest` thrown from the body or a hook skips the run**; when every
   run skipped, the property is reported as a skipped test. Partly skipped runs
-  are discards and count against `maxDiscards`. Unlike an `Assume::that()`
-  discard, a skip says nothing about the input, so a recorded regression whose
-  replay only skipped stays in the corpus instead of being pruned.
+  spend a budget of their own, separate from `maxDiscards`: since core 0.9 a
+  skip is not a discard, and when that budget runs out the message names the
+  environment rather than advising narrower generators. Unlike an
+  `Assume::that()` discard, a skip says nothing about the input, so a recorded
+  regression whose replay only skipped stays in the corpus instead of being
+  pruned.
 
 ### Callable providers
 
@@ -263,7 +266,7 @@ Rules worth knowing:
 | `generators` | Method name or `callable(): array<string, ArbitraryInterface>`; default `<testMethod>Generators` |
 | `examples` | Method name or `callable(): iterable<array<mixed>>`; default `<testMethod>Examples` |
 | `maxShrinks` | Cap on accepted shrink steps; `0` disables shrinking |
-| `maxDiscards` | Discard budget before the property fails with `GaveUpException`; default `runs * 10` |
+| `maxDiscards` | Cap for the discard budget **and** the skip budget. Left unset the two differ: `runs * 10` for discards, `runs` for environmental skips |
 | `timeoutMs` | Wall-clock deadline for a single run — exceeding it fails the property with `DeadlineExceededException` |
 | `budgetMs` | Wall-clock budget for the whole random phase — running out fails with `TimeBudgetExceededException` |
 | `shrink` | `ShrinkMode::Full` (default), `Off` (report the input as generated) or `Bounded` with a budget |
