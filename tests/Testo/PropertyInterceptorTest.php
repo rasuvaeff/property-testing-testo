@@ -27,6 +27,7 @@ use Rasuvaeff\PropertyTesting\Runner\TimeBudgetExceeded;
 use Rasuvaeff\PropertyTesting\Testo\PropertyInterceptor;
 use Rasuvaeff\PropertyTesting\Testo\TestoTrialExecutor;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Support\CollectingListener;
+use Rasuvaeff\PropertyTesting\Testo\Tests\Support\CoreCompat;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Support\Env;
 use Rasuvaeff\PropertyTesting\TimeBudgetExceededException;
 use Testo\Application\Internal\MessengerHub;
@@ -643,7 +644,7 @@ final class PropertyInterceptorTest
 
         $counterExample = $result->failure->getCounterExample();
         Assert::same($counterExample->runsBeforeFailure, 0);
-        Assert::same($counterExample->skips, 1);
+        Assert::same(CoreCompat::discardsBeforeFailure($counterExample), 1);
     }
 
     public function warnsAndGivesUpWhenEveryRunIsDiscarded(): void
@@ -2414,8 +2415,8 @@ final class PropertyInterceptorTest
             caseInfo: new CaseInfo(
                 definition: new CaseDefinition(name: 'Stub', type: 'test', file: Path::create(__FILE__)),
                 suiteIdentity: new SuiteIdentity('Unit'),
-                instance: new class ($instance) implements CaseInstance {
-                    public function __construct(private readonly object $instance) {}
+                instance: new readonly class ($instance) implements CaseInstance {
+                    public function __construct(private object $instance) {}
 
                     #[\Override]
                     public function getInstance(): object
