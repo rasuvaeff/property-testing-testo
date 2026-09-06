@@ -55,7 +55,7 @@ composer require --dev rasuvaeff/property-testing-testo
 ## Требования
 
 - PHP 8.3+
-- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^0.9`
+- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^0.9 || ^0.10`
 - [`testo/testo`](https://packagist.org/packages/testo/testo) `^0.10.39 || ^1.0`
 
 ## Установка
@@ -154,7 +154,9 @@ dead-code-набор Rector удалил бы приватные.
   исключения внутри тела.
 - **`SkipTest` из тела или хука пропускает прогон**; если пропущены все
   прогоны, property сообщается как пропущенный тест. Частично пропущенные
-  прогоны — discard'ы и учитываются в `maxDiscards`. В отличие от discard'а по
+  прогоны тратят собственный бюджет, отдельный от `maxDiscards`: с core 0.9
+  skip — не discard, и при исчерпании этого бюджета сообщение называет
+  окружение, а не советует сузить генераторы. В отличие от discard'а по
   `Assume::that()`, skip ничего не говорит о входе, поэтому записанная
   регрессия, чей реплей только скипнулся, остаётся в корпусе, а не вычищается.
 
@@ -261,7 +263,7 @@ public static function provide(): array
 | `generators` | Имя метода или `callable(): array<string, ArbitraryInterface>`; по умолчанию `<testMethod>Generators` |
 | `examples` | Имя метода или `callable(): iterable<array<mixed>>`; по умолчанию `<testMethod>Examples` |
 | `maxShrinks` | Лимит принятых shrink-шагов; `0` отключает shrinking |
-| `maxDiscards` | Бюджет discard-ов до провала с `GaveUpException`; по умолчанию `runs * 10` |
+| `maxDiscards` | Порог для бюджета discard'ов **и** бюджета skip'ов. Оставленные неявными, они различаются: `runs * 10` для discard'ов и `runs` для skip'ов окружения |
 | `timeoutMs` | Wall-clock дедлайн одного прогона — превышение валит свойство с `DeadlineExceededException` |
 | `budgetMs` | Wall-clock бюджет всей случайной фазы — исчерпание валит с `TimeBudgetExceededException` |
 | `shrink` | `ShrinkMode::Full` (по умолчанию), `Off` (сообщить вход как сгенерирован) или `Bounded` с бюджетом |

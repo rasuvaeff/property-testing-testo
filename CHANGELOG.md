@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Accepts `rasuvaeff/property-testing-core` `^0.10` alongside `^0.9`.
+- Documentation catches up with core 0.9 and 0.10, from the family's 1.0
+  review: a partly skipped property spends a **separate** budget rather than
+  counting against `maxDiscards` (README ×2), `maxDiscards` caps both budgets
+  when set and leaves them different when unset (attribute table ×2), and the
+  two flag variables are off for `false`/`off`/`no` as well as `0`
+  (`AGENTS.md`).
+- `AGENTS.md` no longer routes the corpus through `CorpusFromEnv::resolve()`,
+  a class this package removed in 0.7.0; it is core's `CorpusFactory::fromDsn()`.
+- `psalm.xml` no longer enables `ext-redis` and `composer-require-checker.json`
+  no longer whitelists `Predis\Client` and `Redis`. Both were left over from
+  0.6, when this package parsed the DSN itself; neither `src/` file has
+  mentioned Redis since.
 - `composer rector` is green again: the anonymous `CaseInstance` stub in the
   interceptor's suite is a `readonly` class, as `ReadOnlyAnonymousClassRector`
   asks. It had been red since the stub was introduced, which is `composer
