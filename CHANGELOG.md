@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0 — 2026-09-12
 
 - Accepts `rasuvaeff/property-testing-core` `^0.10` alongside `^0.9`.
 - Documentation catches up with core 0.9 and 0.10, from the family's 1.0
