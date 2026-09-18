@@ -7,6 +7,7 @@ namespace Rasuvaeff\PropertyTesting\Testo;
 use Rasuvaeff\PropertyTesting\AssumptionSkipped;
 use Rasuvaeff\PropertyTesting\Runner\TrialExecutor;
 use Rasuvaeff\PropertyTesting\Runner\TrialOutcome;
+use Testo\Assert;
 use Testo\Codecov\Result\CoverageResult;
 use Testo\Core\Context\TestInfo;
 use Testo\Core\Context\TestResult;
@@ -31,6 +32,13 @@ use Testo\Core\Value\Status;
  * reported time is the whole property's, not the last run's). Every other key
  * is last-write-wins.
  *
+ * A body that throws never reaches Testo's `#[ExpectException]`: the terminal
+ * handler turns the throw into this run's failed result before any outer
+ * interceptor sees it, and the outer expectation would then judge the
+ * aggregate. `Property::$throws` states the expectation where it is checked:
+ * an expected class turns the failure into a pass — recorded as an assertion,
+ * the way Testo's own expectation is — and a run that ends without it fails.
+ *
  * @internal
  */
 final class TestoTrialExecutor implements TrialExecutor
@@ -48,10 +56,12 @@ final class TestoTrialExecutor implements TrialExecutor
 
     /**
      * @param \Closure(TestInfo): TestResult $next
+     * @param ?class-string<\Throwable> $expectedExceptionClass
      */
     public function __construct(
         private readonly TestInfo $info,
         private readonly \Closure $next,
+        private readonly ?string $expectedExceptionClass = null,
     ) {}
 
     #[\Override]
@@ -78,7 +88,7 @@ final class TestoTrialExecutor implements TrialExecutor
             // threw instead of reporting: that is this run's failure, and it
             // must reach the engine as one — escaping here would abort the
             // whole property with no counterexample.
-            return TrialOutcome::failed($failure);
+            return $this->verdict($failure);
         }
 
         foreach (array_keys($result->attributes) as $key) {
@@ -98,15 +108,44 @@ final class TestoTrialExecutor implements TrialExecutor
         }
 
         if ($result->status->isSuccessful()) {
-            return TrialOutcome::passed();
+            return $this->verdict(null);
         }
 
         // Failed, Error — and Aborted, Risky: anything that is not a success is
         // not evidence the input passed.
-        return TrialOutcome::failed($result->failure ?? new \RuntimeException(sprintf(
+        return $this->verdict($result->failure ?? new \RuntimeException(sprintf(
             'The run ended with status %s and no failure attached',
             $result->status->name,
         )));
+    }
+
+    /**
+     * What one run's failure (or its absence) means to the engine once the
+     * expected exception class, if any, has had its say.
+     */
+    private function verdict(?\Throwable $failure): TrialOutcome
+    {
+        if ($this->expectedExceptionClass === null) {
+            return $failure instanceof \Throwable ? TrialOutcome::failed($failure) : TrialOutcome::passed();
+        }
+
+        if (!$failure instanceof \Throwable) {
+            return TrialOutcome::failed(new \RuntimeException(sprintf(
+                'Expected %s to be thrown, but it was not',
+                $this->expectedExceptionClass,
+            )));
+        }
+
+        if (!$failure instanceof $this->expectedExceptionClass) {
+            return TrialOutcome::failed($failure);
+        }
+
+        // Recorded on the test's assertion history, as Testo records its own
+        // fulfilled expectation: a body whose only check is the throw would
+        // otherwise come back Risky for asserting nothing.
+        Assert::instanceOf($failure, $this->expectedExceptionClass);
+
+        return TrialOutcome::passed();
     }
 
     /**

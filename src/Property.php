@@ -34,22 +34,30 @@ use Testo\Pipeline\Attribute\Interceptable;
 #[FallbackInterceptor(PropertyInterceptor::class)]
 final readonly class Property implements Interceptable
 {
-    public \Closure|string|null $generators;
+    /**
+     * A non-callable array is kept as written so that the interceptor can
+     * refuse it by name; the attribute itself validates nothing.
+     *
+     * @var \Closure|array<array-key, mixed>|string|null
+     */
+    public \Closure|array|string|null $generators;
 
-    public \Closure|string|null $examples;
+    /** @var \Closure|array<array-key, mixed>|string|null */
+    public \Closure|array|string|null $examples;
 
     /**
      * @param int $runs Number of successful random inputs to check. Discarded inputs do not count.
      * @param ?int $seed Fixed seed for reproducibility. Omit to let the runner pick a random one
      *        (the failing seed is reported by {@see PropertyViolationException}).
-     * @param (callable(): array<string, ArbitraryInterface>)|string|null $generators Method name
-     *        or callable returning array<string, ArbitraryInterface>. Defaults to
+     * @param (callable(): array<string, ArbitraryInterface>)|array<array-key, mixed>|string|null $generators
+     *        Method name or callable returning array<string, ArbitraryInterface>. Defaults to
      *        `<testMethod>Generators`.
      * @param ?int $maxShrinks Cap on the number of accepted shrink steps. Null (default) means
      *        no cap. 0 disables shrinking, reporting the original counterexample unchanged.
-     * @param (callable(): iterable<array<mixed>>)|string|null $examples Method name or callable
-     *        returning fixed positional argument tuples, each run (before the random inputs) as
-     *        an explicit example. Defaults to `<testMethod>Examples` when that method exists.
+     * @param (callable(): iterable<array<mixed>>)|array<array-key, mixed>|string|null $examples
+     *        Method name or callable returning fixed positional argument tuples, each run (before
+     *        the random inputs) as an explicit example. Defaults to `<testMethod>Examples` when
+     *        that method exists.
      * @param ?int $maxDiscards Maximum number of discarded inputs before the property gives up.
      *        Null (default) uses ten times the resolved run count.
      * @param ?int $timeoutMs Wall-clock deadline for a single run (random or example) in
@@ -88,13 +96,21 @@ final readonly class Property implements Interceptable
      *        may be partial; it may also cover everything, in which case auto derives nothing.
      *        Deliberately opt-in and deliberately without an environment knob: the environment
      *        dials the suite, while this changes what one property's arguments mean.
+     * @param ?class-string<\Throwable> $throws The exception class every run must throw. A run that
+     *        throws it (or a subclass) passes; one that returns normally fails with
+     *        `Expected <class> to be thrown, but it was not` and shrinks like any other
+     *        counterexample; one that throws another class fails with that throw. A skip and an
+     *        `Assume::that()` discard keep their meaning — never a pass earned by throwing. This is
+     *        the per-run replacement for `#[ExpectException]`, which observes the aggregate result
+     *        and is refused on a property. The matching throw is recorded as an assertion, so a
+     *        body that asserts nothing else is not reported as risky.
      */
     public function __construct(
         public int $runs = 100,
         public ?int $seed = null,
-        callable|string|null $generators = null,
+        callable|array|string|null $generators = null,
         public ?int $maxShrinks = null,
-        callable|string|null $examples = null,
+        callable|array|string|null $examples = null,
         public ?int $maxDiscards = null,
         public ?int $timeoutMs = null,
         public ?int $budgetMs = null,
@@ -104,41 +120,30 @@ final readonly class Property implements Interceptable
         public bool $derandomize = false,
         public ?string $path = null,
         public EdgeCases $edgeCases = EdgeCases::Mixin,
+        public bool $auto = false,
         // Last on purpose: a parameter added anywhere else moves the ones
         // after it, and every attribute passing them positionally would
         // silently mean something else. New parameters append here.
-        public bool $auto = false,
+        public ?string $throws = null,
     ) {
-        $this->generators = \is_string($generators) || $generators === null
-            ? $generators
-            : \Closure::fromCallable($generators);
-        $this->examples = \is_string($examples) || $examples === null
-            ? $examples
-            : \Closure::fromCallable($examples);
+        // A data holder: every value is validated by the interceptor, which
+        // can name the property. Testo instantiates the attribute long before
+        // the interceptor runs, and a constructor that throws aborts the
+        // pipeline with the reason buried in `previous`.
+        $this->generators = $this->provider($generators);
+        $this->examples = $this->provider($examples);
+    }
 
-        if ($runs < 1) {
-            throw new \InvalidArgumentException('Runs must be greater than or equal to 1');
+    /**
+     * @param callable|array<array-key, mixed>|string|null $provider
+     * @return \Closure|array<array-key, mixed>|string|null
+     */
+    private function provider(callable|array|string|null $provider): \Closure|array|string|null
+    {
+        if (\is_callable($provider) && !\is_string($provider)) {
+            return \Closure::fromCallable($provider);
         }
-        if ($maxShrinks !== null && $maxShrinks < 0) {
-            throw new \InvalidArgumentException('Max shrinks must be greater than or equal to 0');
-        }
-        if ($maxDiscards !== null && $maxDiscards < 0) {
-            throw new \InvalidArgumentException('Max discards must be greater than or equal to 0');
-        }
-        if ($timeoutMs !== null && $timeoutMs < 1) {
-            throw new \InvalidArgumentException('Timeout must be greater than or equal to 1 millisecond');
-        }
-        if ($budgetMs !== null && $budgetMs < 1) {
-            throw new \InvalidArgumentException('Budget must be greater than or equal to 1 millisecond');
-        }
-        if ($shrinkBudgetMs !== null && $shrinkBudgetMs < 1) {
-            throw new \InvalidArgumentException('Shrink budget must be greater than or equal to 1 millisecond');
-        }
-        if ($path !== null && $seed === null) {
-            // The engine says the same thing, but a property is compiled long
-            // before it runs: catching it here names the attribute that is
-            // wrong rather than the config built from it.
-            throw new \InvalidArgumentException('Path replay requires an explicit seed');
-        }
+
+        return $provider;
     }
 }

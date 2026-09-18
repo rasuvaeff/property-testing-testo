@@ -10,6 +10,7 @@ use Rasuvaeff\PropertyTesting\Property;
 use Rasuvaeff\PropertyTesting\StateMachine\Command;
 use Rasuvaeff\PropertyTesting\StateMachine\CommandSequence;
 use Rasuvaeff\PropertyTesting\StateMachine\StateMachine;
+use Testo\Assert\ExpectNoAssertions;
 use Testo\Test;
 
 /**
@@ -18,7 +19,7 @@ use Testo\Test;
  * result to a simplified model. When it fails, the runner shrinks the failing
  * sequence to the shortest one that still breaks. Run it through Testo:
  *
- *   docker run --rm -v "$PWD":/app -w /app composer:2 vendor/bin/testo
+ *   docker run --rm -v "$PWD":/app -w /app composer:2 vendor/bin/testo --suite=Examples
  *
  * Executing this file directly with `php` only defines the classes and prints
  * the hint at the bottom — the property runs under Testo.
@@ -142,8 +143,13 @@ final class StackStateMachineProperties
      * Any valid sequence of pushes and pops keeps the real stack in step with
      * the model. The initial model is the empty stack ([]); each generated
      * command carries its own precondition, model transition and postcondition.
+     *
+     * StateMachine::check() throws on a violated postcondition instead of
+     * recording Testo assertions, so the test declares that it asserts nothing
+     * itself — without the attribute Testo would report it as risky.
      */
     #[Property(runs: 200)]
+    #[ExpectNoAssertions]
     public function stackBehavesLikeItsModel(CommandSequence $sequence): void
     {
         StateMachine::check($sequence, static fn(): ExampleStack => new ExampleStack());
@@ -161,4 +167,7 @@ final class StackStateMachineProperties
     }
 }
 
-echo 'Defined ' . StackStateMachineProperties::class . " — run the properties with: vendor/bin/testo\n";
+// Printed only when this file is executed directly; under Testo it is merely loaded.
+if (realpath((string) ($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
+    echo 'Defined ' . StackStateMachineProperties::class . " — run the properties with: vendor/bin/testo --suite=Examples\n";
+}

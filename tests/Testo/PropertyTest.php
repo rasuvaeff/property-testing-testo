@@ -6,8 +6,8 @@ namespace Rasuvaeff\PropertyTesting\Testo\Tests;
 
 use Rasuvaeff\PropertyTesting\Property;
 use Testo\Assert;
-use Testo\Assert\ExpectException;
 use Testo\Codecov\Covers;
+use Testo\Data\DataProvider;
 use Testo\Test;
 
 #[Test]
@@ -80,24 +80,38 @@ final class PropertyTest
         Assert::same($calls, 2);
     }
 
-    #[ExpectException(\TypeError::class)]
-    public function rejectsNonCallableArrayProviderAtAttributeInstantiation(): void
+    public function keepsANonCallableArrayProviderAsWritten(): void
     {
+        // Testo instantiates the attribute before the interceptor runs, so the
+        // attribute refuses nothing: the interceptor names the mistake.
         $method = new \ReflectionMethod(NonCallableArrayProviderStub::class, 'check');
 
-        $method->getAttributes(Property::class)[0]->newInstance();
+        $property = $method->getAttributes(Property::class)[0]->newInstance();
+
+        Assert::same($property->generators, [SharedCallableProvider::class, 'missingMethod']);
     }
 
-    #[ExpectException(\InvalidArgumentException::class)]
-    public function rejectsTimeoutBelowOneMillisecond(): void
+    /**
+     * The attribute is a data holder: a value the engine would refuse is kept
+     * and reported by the interceptor with the property's name, instead of
+     * aborting the pipeline from a constructor Testo calls first.
+     */
+    #[DataProvider('outOfRangeValuesProvider')]
+    public function keepsAnOutOfRangeValueForTheInterceptorToRefuse(string $parameter, int $value): void
     {
-        new Property(timeoutMs: 0);
+        $property = new Property(...[$parameter => $value]);
+
+        Assert::same($property->{$parameter}, $value);
     }
 
-    #[ExpectException(\InvalidArgumentException::class)]
-    public function rejectsBudgetBelowOneMillisecond(): void
+    public static function outOfRangeValuesProvider(): iterable
     {
-        new Property(budgetMs: 0);
+        yield 'runs: 0' => ['runs', 0];
+        yield 'maxShrinks: -1' => ['maxShrinks', -1];
+        yield 'maxDiscards: -1' => ['maxDiscards', -1];
+        yield 'timeoutMs: 0' => ['timeoutMs', 0];
+        yield 'budgetMs: 0' => ['budgetMs', 0];
+        yield 'shrinkBudgetMs: 0' => ['shrinkBudgetMs', 0];
     }
 
     public function acceptsZeroMaxShrinks(): void
@@ -125,33 +139,9 @@ final class PropertyTest
         Assert::same((new Property(runs: 1))->runs, 1);
     }
 
-    #[ExpectException(\InvalidArgumentException::class)]
-    public function rejectsRunsBelowOne(): void
-    {
-        new Property(runs: 0);
-    }
-
-    #[ExpectException(\InvalidArgumentException::class)]
-    public function rejectsNegativeMaxShrinks(): void
-    {
-        new Property(maxShrinks: -1);
-    }
-
-    #[ExpectException(\InvalidArgumentException::class)]
-    public function rejectsNegativeMaxDiscards(): void
-    {
-        new Property(maxDiscards: -1);
-    }
-
     public function acceptsAShrinkBudgetOfOneMillisecond(): void
     {
         Assert::same((new Property(shrinkBudgetMs: 1))->shrinkBudgetMs, 1);
-    }
-
-    #[ExpectException(\InvalidArgumentException::class)]
-    public function rejectsAShrinkBudgetBelowOneMillisecond(): void
-    {
-        new Property(shrinkBudgetMs: 0);
     }
 
     public function acceptsAPathBesideASeed(): void
@@ -159,17 +149,19 @@ final class PropertyTest
         Assert::same((new Property(seed: 7, path: 'x:1'))->path, 'x:1');
     }
 
-    public function rejectsAPathWithoutASeed(): void
+    public function keepsAPathWithoutASeed(): void
     {
-        // The steps of a descent mean nothing against another run, so a path
-        // without the seed that produced it is a mistake worth naming at the
-        // attribute rather than in the config built from it.
-        try {
-            new Property(path: 'x:1');
+        $property = new Property(path: 'x:1');
 
-            Assert::fail('expected an InvalidArgumentException');
-        } catch (\InvalidArgumentException $e) {
-            Assert::same($e->getMessage(), 'Path replay requires an explicit seed');
-        }
+        Assert::same($property->path, 'x:1');
+        Assert::null($property->seed);
+    }
+
+    public function throwsDefaultsToNullAndKeepsTheClassAsWritten(): void
+    {
+        Assert::null((new Property())->throws);
+        Assert::same((new Property(throws: \DomainException::class))->throws, \DomainException::class);
+        // Not validated here either; the interceptor refuses a non-Throwable.
+        Assert::same((new Property(throws: \stdClass::class))->throws, \stdClass::class);
     }
 }

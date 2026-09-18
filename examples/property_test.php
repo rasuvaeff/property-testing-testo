@@ -15,7 +15,7 @@ use Testo\Test;
  * this package. The class below is a normal Testo test case; run it through the
  * Testo runner:
  *
- *   docker run --rm -v "$PWD":/app -w /app composer:2 vendor/bin/testo
+ *   docker run --rm -v "$PWD":/app -w /app composer:2 vendor/bin/testo --suite=Examples
  *
  * Executing this file directly with `php` only defines the test class and prints
  * the hint at the bottom — the property assertions run under Testo, which feeds
@@ -98,6 +98,28 @@ final class ListReversalProperties
         Assert::true($percent >= 0 && $percent <= 100);
         Assert::true($label !== '');
     }
+
+    /**
+     * Expected exception: `throws:` states, per run, the class the body must
+     * throw. A run that throws it passes (the throw is recorded as an
+     * assertion); one that returns normally, or throws something else, is a
+     * counterexample and shrinks like any other. `#[ExpectException]` cannot
+     * do this — it judges the aggregate result — and is refused on a property.
+     */
+    #[Property(runs: 200, throws: \DivisionByZeroError::class)]
+    public function dividingByZeroThrows(int $dividend): void
+    {
+        intdiv($dividend, 0);
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function dividingByZeroThrowsGenerators(): array
+    {
+        return ['dividend' => Gen::int()];
+    }
 }
 
-echo 'Defined ' . ListReversalProperties::class . " — run the properties with: vendor/bin/testo\n";
+// Printed only when this file is executed directly; under Testo it is merely loaded.
+if (realpath((string) ($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
+    echo 'Defined ' . ListReversalProperties::class . " — run the properties with: vendor/bin/testo --suite=Examples\n";
+}

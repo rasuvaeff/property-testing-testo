@@ -20,5 +20,11 @@ return new ApplicationConfig(
             name: 'Benchmarks',
             location: ['benchmarks'],
         ),
+        // The runnable examples (`vendor/bin/testo --suite=Examples`), in a
+        // suite of their own so that `composer test` (Unit) leaves them alone.
+        new SuiteConfig(
+            name: 'Examples',
+            location: ['examples'],
+        ),
     ],
 );
