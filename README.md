@@ -158,7 +158,10 @@ What the adapter does and does not combine with:
   `PropertyViolationException`, which is a `RuntimeException` — so
   `#[ExpectException(\RuntimeException::class)]` would be satisfied by any
   falsification, a failed assertion included. State the expectation per run
-  with [`throws:`](#expected-exceptions-throws) instead.
+  with [`throws:`](#expected-exceptions-throws) instead — not with
+  `Expect::exception()` in the body either: it registers an expectation the
+  same outer interceptor judges against the aggregate, and no guard can see
+  it.
 - **A `SkipTest` thrown from the body or a hook skips the run**; when every
   run skipped, the property is reported as a skipped test. Partly skipped runs
   spend a budget of their own, separate from `maxDiscards`: since core 0.9 a
