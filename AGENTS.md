@@ -197,8 +197,26 @@ replay (`PropertyDefinition::$replayRegressions = false`), the **env**
 - Code: `declare(strict_types=1)`, `final readonly class`, `#[\Override]`,
   explicit types.
 - `examples/` is part of the public contract: the scripts are `#[Property]`
-  test cases run through `vendor/bin/testo`, not plain PHP scripts. Keep them
-  runnable and update `examples/README.md` when usage changes.
+  test cases in the `Examples` suite of `testo.php`
+  (`vendor/bin/testo --suite=Examples`), and each also runs as a plain PHP
+  script (`php examples/<name>.php`, which `bin/package-audit` does). Keep
+  both ways runnable and update `examples/README.md` when usage changes.
+- **The attribute is a data holder; the interceptor validates.** Testo
+  instantiates `#[Property]` at `ORDER_ATTRIBUTES`, long before
+  `PropertyInterceptor` runs, so a constructor that throws comes back as
+  `Status::Aborted` with `Error during test execution pipeline.` on top and
+  the reason buried in `previous`. Every refusal — out-of-range values, a
+  non-callable array provider, `path` without `seed`, a non-Throwable
+  `throws`, `#[ExpectException]` beside the attribute — lives in
+  `PropertyInterceptor` and names the property.
+- **`throws:` is checked by `TestoTrialExecutor`, on the returned result and
+  on a throw alike.** A body that throws never reaches Testo's
+  `#[ExpectException]` (the terminal handler turns the throw into the run's
+  result first; the outer expectation judges the aggregate), which is why the
+  attribute combination is refused. A matching throw is recorded through
+  `Assert::instanceOf()` so the aggregate is not `Risky` for a body that
+  asserts nothing else — `throws:` with `#[ExpectNoAssertions]` therefore
+  comes out `Risky`, as Testo's own expectation would.
 - **CI workflows are SHA-pinned.** Every `uses:` in `.github/workflows/*.yml`
   references a 40-char commit SHA with a `# vN` trailing comment
   (e.g. `actions/checkout@<sha> # v4`). Never revert to floating `@vN` tags.

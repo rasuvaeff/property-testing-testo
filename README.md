@@ -148,10 +148,17 @@ What the adapter does and does not combine with:
   supply the arguments — and `#[Property]` on a function-based case is
   refused: both are reported as an error of the test with a message, as is
   any other misconfiguration (a missing generators method, a bad
-  `PROPERTY_RUNS`, an unknown phase).
-- **`#[ExpectException]` does not see the body's exception**: the expectation
-  interceptor runs outside this one and observes the property's aggregate
-  failure. Assert on exceptions inside the body instead.
+  `PROPERTY_RUNS`, an unknown phase, `runs: 0`, a provider key that is not a
+  parameter of the property). The attribute itself validates nothing: Testo
+  instantiates it before the interceptor runs, so the interceptor is the one
+  place that can name the property in the message.
+- **`#[ExpectException]` cannot be combined with `#[Property]`** and is
+  refused as an error of the test: the expectation interceptor runs outside
+  this one and observes the property's aggregate failure — a
+  `PropertyViolationException`, which is a `RuntimeException` — so
+  `#[ExpectException(\RuntimeException::class)]` would be satisfied by any
+  falsification, a failed assertion included. State the expectation per run
+  with [`throws:`](#expected-exceptions-throws) instead.
 - **A `SkipTest` thrown from the body or a hook skips the run**; when every
   run skipped, the property is reported as a skipped test. Partly skipped runs
   spend a budget of their own, separate from `maxDiscards`: since core 0.9 a
@@ -160,6 +167,37 @@ What the adapter does and does not combine with:
   `Assume::that()` discard, a skip says nothing about the input, so a recorded
   regression whose replay only skipped stays in the corpus instead of being
   pruned.
+
+### Expected exceptions (`throws:`)
+
+A body that throws never reaches `#[ExpectException]`: Testo's terminal
+handler turns the throw into that run's failed result before any outer
+interceptor sees it. `throws:` states the expectation where it is checked:
+
+```php
+#[Property(runs: 200, throws: ImageUploadException::class)]
+public function anImageNarrowerThanTheProfileIsRejected(int $width, int $minWidth): void
+{
+    $this->validator->validate(imageWithWidth($width), profileWithMinWidth($minWidth));
+}
+```
+
+Semantics, per run:
+
+- Throws the class (a subclass matches) — the run **passes**. The matching
+  throw is recorded as an assertion, the way Testo records its own fulfilled
+  expectation, so a body that asserts nothing else is not reported as risky.
+- Returns normally — the run **fails** with `Expected <class> to be thrown,
+  but it was not`, and the input shrinks like any other counterexample.
+- Throws another class — that throw is the failure, exactly as it would be
+  without `throws:`.
+- A `SkipTest` from the body or a hook still skips the run, and an
+  `Assume::that()` discard still discards it: the environment's verdict about
+  the run is never a pass earned by throwing.
+
+A class that is not a `Throwable` is a misconfiguration, reported as the
+test's error. The same knob is `PropertyCheck::throws()` in the PHPUnit
+adapter.
 
 ### Callable providers
 
@@ -248,9 +286,11 @@ Rules worth knowing:
 - A type the deriver cannot read (a bare `array`, `mixed`, an untyped or
   variadic parameter) fails with an error naming the method and the parameter
   — never a silently widened guess.
-- With `auto: true` a provider key that is not a parameter of the property is
-  an error: merge semantics would otherwise silently replace a typoed entry
-  with a signature-derived generator.
+- A provider key that is not a parameter of the property is an error, with
+  or without `auto`: ignored, a typoed entry leaves its parameter without a
+  generator, and under `auto` merge semantics would silently replace it with
+  a signature-derived one. A provider shared by two properties of different
+  arity is therefore refused — give each property its own.
 - A full provider plus `auto: true` is legal — auto derives nothing; that is
   the transitional state while a test migrates.
 - There is deliberately no `PROPERTY_AUTO` environment variable: the
@@ -276,6 +316,7 @@ Rules worth knowing:
 | `path` | Replays a recorded shrink descent (`CounterExample::$path`) instead of searching for it; requires `seed` |
 | `edgeCases` | `EdgeCases::None` turns off the numeric boundary bias — for a property the edges only cost runs |
 | `auto` | Derives generators from the property's signature for every parameter the provider does not cover; the provider becomes partial overrides. Off by default, and stays off |
+| `throws` | The exception class every run must throw — a run that throws it passes, one that returns normally or throws another class fails and shrinks. The per-run replacement for `#[ExpectException]`, which is refused on a property |
 
 ### Environment overrides
 
@@ -289,10 +330,10 @@ what the attribute wrote down.
 |---|---|
 | `PROPERTY_RUNS` | Positive integer that overrides every property's run count (dial runs up in CI) |
 | `PROPERTY_SEED` | Integer seed for any property whose attribute omits `seed` (replay a whole suite). An explicit attribute `seed` still wins |
-| `PROPERTY_VERBOSE` | Any value except `''`/`'0'` logs every run's generated arguments and each accepted shrink step |
+| `PROPERTY_VERBOSE` | Logs every run's generated arguments and each accepted shrink step. Off for `''`, `0`, `false`, `off` and `no` (case-insensitive, trimmed); anything else enables. Under core 0.9 only `''` and `0` disabled — `false` enabled the trace |
 | `PROPERTY_DB` | Directory path enabling the regression corpus, or a `redis://host[:port][/db][?prefix=key-prefix]` DSN (`rediss://` for TLS) for a corpus shared between CI and developers. Unset means off, nothing is written |
 | `PROPERTY_PHASES` | Comma-separated stage list (`examples,corpus,random,shrink`, case-insensitive) that overrides the attribute — an unknown name throws rather than skipping a stage. `examples,corpus` is the fast pull-request gate |
-| `PROPERTY_DERANDOMIZE` | Any value except `''`/`'0'` derives every unset seed from the property id, making a whole suite reproducible without editing it |
+| `PROPERTY_DERANDOMIZE` | Derives every unset seed from the property id, making a whole suite reproducible without editing it. `''` leaves the attribute alone; `0`, `false`, `off` and `no` (case-insensitive, trimmed) force it off, overriding `derandomize: true`; anything else forces it on. Under core 0.9 only `0` was a falsy word |
 | `PROPERTY_PATH` | A recorded shrink descent replayed instead of searched for. **Requires a pinned seed** — `PROPERTY_SEED` or the attribute's — and is refused without one, because an unseeded property gets a random seed and the path would replay a run that never happened. An attribute `path` wins. It describes one failure, so run it with a filter on that one test — every other property would report the path as stale |
 | `PROPERTY_EDGE_CASES` | `mixin` or `none` (case-insensitive) — the numeric boundary bias for the whole suite, overriding the attribute. An unknown value throws |
 
@@ -387,6 +428,43 @@ implementation, not a contract. The environment variables and the `PROPERTY_DB`
 DSN are parsed by the engine (`EnvironmentOverrides`, `CorpusFactory`), so
 they mean the same thing under the PHPUnit adapter.
 
+### Listeners
+
+`PropertyInterceptor::__construct(Messenger $messenger, ?Clock $clock = null,
+iterable $listeners = [])` takes `PropertyListener` observers of the engine's
+lifecycle events (`PropertyStarted`, `RunFailed`, `ShrinkAccepted`, …), the
+counterpart of the PHPUnit adapter's `listeners(...)`. The attribute
+self-registers an interceptor built by Testo's container, which knows nothing
+about your listeners, so hand it one of your own from a plugin in `testo.php`;
+Testo prefers a configured interceptor over the one the attribute would
+create:
+
+```php
+use Internal\Container\Container;
+use Rasuvaeff\PropertyTesting\Testo\PropertyInterceptor;
+use Testo\Application\Config\ApplicationConfig;
+use Testo\Common\PluginConfigurator;
+use Testo\Pipeline\InterceptorCollector;
+
+return new ApplicationConfig(
+    suites: [/* … */],
+    plugins: [
+        new class implements PluginConfigurator {
+            public function configure(Container $container): void
+            {
+                $container->get(InterceptorCollector::class)->addInterceptor(
+                    $container->make(PropertyInterceptor::class, ['listeners' => [new MyListener()]]),
+                );
+            }
+        },
+    ],
+);
+```
+
+`make()` builds the interceptor with its other dependencies resolved by the
+container. The `PROPERTY_VERBOSE` trace listener is appended automatically.
+A listener that throws aborts the run — engine policy.
+
 ## Security
 
 Generated values are pseudo-random (seeded MT19937), not cryptographic. Seeds
@@ -396,8 +474,8 @@ verbatim, so do not point the variable at a directory that gets published.
 
 ## Examples
 
-See [examples/](examples/) — `#[Property]` test cases run through
-`vendor/bin/testo`.
+See [examples/](examples/) — `#[Property]` test cases in a Testo suite of
+their own: `vendor/bin/testo --suite=Examples`.
 
 ## Development
 

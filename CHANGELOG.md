@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.11.0 — 2026-09-18
+
+- `#[Property]` combined with Testo's `#[ExpectException]` is refused as an
+  error of the test (`cannot be combined with #[ExpectException]; use throws:
+  instead`), the way a data provider already was. The expectation interceptor
+  runs outside the property and sees only the aggregate
+  `PropertyViolationException` — a `RuntimeException` — so
+  `#[ExpectException(\RuntimeException::class)]` was satisfied by any
+  falsification, a failed assertion included, and the test came back green
+  (#56).
+- `#[Property(throws: SomeException::class)]`, appended as the last
+  parameter: the exception class every run must throw, with the PHPUnit
+  adapter's `PropertyCheck::throws()` semantics — throwing it (or a subclass)
+  passes the run, returning normally fails it with `Expected <class> to be
+  thrown, but it was not` and shrinks the input, another class is that run's
+  failure; a skip and an `Assume::that()` discard keep their meaning. The
+  matching throw is recorded as an assertion, so a body that only throws is
+  not reported as risky (#57).
+- A generators key that is not a parameter of the property is refused with or
+  without `auto: true`; it used to be ignored silently without `auto`. A
+  provider shared by two properties of different arity is therefore refused —
+  give each property its own (#58).
+- The attribute is a data holder and the interceptor validates it. Testo
+  instantiates `#[Property]` before the interceptor runs, so `runs: 0`, a
+  negative cap, `path` without `seed` or `generators: [Cls::class, 'missing']`
+  used to abort the pipeline (`Error during test execution pipeline.`, reason
+  in `previous`); they are now the test's own error, `#[Property] on
+  "<method>" cannot be set up: …`. `Property::$generators`/`$examples`
+  accordingly accept — and keep as written — a non-callable array, which
+  widens their type from `\Closure|string|null` to
+  `\Closure|array|string|null`; the attribute constructor no longer throws.
+- `PropertyInterceptor::__construct(listeners:)` is documented (README ×2,
+  `llms.txt`) with the `testo.php` plugin recipe for attaching a
+  `PropertyListener`, which the suite now executes end to end.
+- The environment table says what core 0.10 does: `PROPERTY_VERBOSE` and
+  `PROPERTY_DERANDOMIZE` are off for `false`/`off`/`no` as well as `''`/`0`
+  (README ×2, `llms.txt`); the package `AGENTS.md` had it since 0.10.0.
+- `examples/` are a Testo suite of their own: `vendor/bin/testo
+  --suite=Examples` runs them (no documented command did before), the
+  stateful example carries `#[ExpectNoAssertions]` instead of coming back
+  risky, and `property_test.php` demonstrates `throws:`.
+- `testo/testo` is required as `^0.10.39`; the `|| ^1.0` half promised
+  compatibility with a major that has not been released.
+
 ## 0.10.0 — 2026-09-12
 
 - Accepts `rasuvaeff/property-testing-core` `^0.10` alongside `^0.9`.

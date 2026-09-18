@@ -45,10 +45,25 @@ installation fails at resolution time.
 - `auto: true` derives a generator from the property's signature for every
   parameter the provider does not cover (Gen::forParameters rules: `@param`
   psalm type wins over the native type; unreadable types throw naming the
-  method and parameter). The provider becomes PARTIAL overrides; with auto a
-  provider key that is not a parameter is an error. Strictly opt-in, never the
-  default (bare int/float derive their full native domain). No PROPERTY_AUTO
-  env variable, deliberately.
+  method and parameter). The provider becomes PARTIAL overrides. Strictly
+  opt-in, never the default (bare int/float derive their full native domain).
+  No PROPERTY_AUTO env variable, deliberately.
+- A provider key that is not a parameter of the property is an error, with or
+  without `auto` (a provider shared by properties of different arity is
+  refused).
+- `#[ExpectException]` on a `#[Property]` method is refused as the test's
+  error: Testo's expectation interceptor sees only the aggregate
+  `PropertyViolationException` (a `RuntimeException`) and would be satisfied
+  by any falsification. Use `throws:` — per run: throws the class (or a
+  subclass) = pass, recorded as an assertion (a body that only throws is not
+  risky); returns normally = fail `Expected <class> to be thrown, but it was
+  not`, shrunk like any counterexample; another class = that failure; a skip
+  or an `Assume::that()` discard keep their meaning.
+- The attribute validates nothing (Testo instantiates it before the
+  interceptor runs); `runs: 0`, a negative cap, `path` without `seed`, a
+  non-callable `[Cls::class, 'missing']` provider, a non-Throwable `throws`
+  are reported by the interceptor as `#[Property] on "<method>" cannot be set
+  up: …` — an error of that test, never an aborted pipeline.
 
 ## API
 
@@ -71,6 +86,7 @@ installation fails at resolution time.
     path: null,            // replay a recorded shrink descent; REQUIRES seed
     edgeCases: EdgeCases::Mixin, // None = no numeric boundary bias
     auto: false,           // derive missing generators from the signature; provider = partial overrides
+    throws: null,          // class-string<Throwable> every run must throw; per-run replacement for #[ExpectException]
 )]
 ```
 
@@ -120,10 +136,10 @@ public static function additionCommutesExamples(): array
 |---|---|---|
 | `PROPERTY_RUNS` | positive int | Overrides every property's run count, including the attribute's |
 | `PROPERTY_SEED` | int | Seeds every property whose attribute omits `seed`; attribute wins |
-| `PROPERTY_VERBOSE` | anything but `''`/`'0'` | Logs each run's arguments and each accepted shrink step |
+| `PROPERTY_VERBOSE` | off for `''`, `0`, `false`, `off`, `no` (case-insensitive, trimmed); anything else enables (core 0.9: only `''`/`0` disabled) | Logs each run's arguments and each accepted shrink step |
 | `PROPERTY_DB` | directory path OR `redis://host[:port][/db][?prefix=key-prefix]` (`rediss://` = TLS; parsed by core `CorpusFactory`) | Regression corpus: record on falsification, replay before the random phase, prune on green replay. A DSN builds a RedisCorpus (ext-redis preferred, else predis; neither installed THROWS) — same document as the directory form, shared between CI and developers |
 | `PROPERTY_PHASES` | `examples,corpus,random,shrink` (comma-separated, case-insensitive) | Stages to run; OVERRIDES the attribute; unknown name throws |
-| `PROPERTY_DERANDOMIZE` | anything but `''`/`'0'` | Unset seeds derived from the property id; OVERRIDES the attribute; an attribute `seed` still wins |
+| `PROPERTY_DERANDOMIZE` | `''` = attribute wins; `0`, `false`, `off`, `no` (case-insensitive, trimmed) force off; anything else forces on (core 0.9: only `0` was falsy) | Unset seeds derived from the property id; OVERRIDES the attribute; an attribute `seed` still wins |
 | `PROPERTY_PATH` | recorded `CounterExample::$path` | Replays that descent; needs the seed of that run; an attribute `path` wins |
 | `PROPERTY_EDGE_CASES` | `mixin` \| `none` (case-insensitive) | Numeric boundary bias; OVERRIDES the attribute; unknown value throws |
 
@@ -133,7 +149,17 @@ public static function additionCommutesExamples(): array
   reflection + env into a core `PropertyDefinition`, maps the structured
   `PropertyResult` to one Testo `TestResult`, prints the distribution report
   and discard warning (both on `Messenger::CHANNEL_STDERR` -- a STDOUT message
-  is dropped by Testo's renderer below `-v`).
+  is dropped by Testo's renderer below `-v`). Constructor
+  `(Messenger $messenger, ?Clock $clock = null, iterable $listeners = [])`:
+  `listeners` are `PropertyListener` observers of the engine's events. Wire
+  them from a `PluginConfigurator` in `testo.php` (`plugins:`); a configured
+  interceptor wins over the one the attribute self-registers:
+
+  ```php
+  $container->get(InterceptorCollector::class)->addInterceptor(
+      $container->make(PropertyInterceptor::class, ['listeners' => [new MyListener()]]),
+  );
+  ```
 - `TestoTrialExecutor` — runs the body through Testo's pipeline; merges every
   run's `TestResult` attributes into the aggregate result.
 - `VerboseListener` — `PROPERTY_VERBOSE` output as an engine event listener;
@@ -150,4 +176,11 @@ public function stackBehavesLikeItsModel(CommandSequence $sequence): void
 ```
 
 `Gen::commands()`, the `Command` interface and `StateMachine::check()` are core
-API — see the core package's llms.txt.
+API — see the core package's llms.txt. `StateMachine::check()` throws rather
+than recording Testo assertions: mark such a property `#[ExpectNoAssertions]`
+or it comes back Risky.
+
+### Examples
+
+`examples/*.php` are `#[Property]` test cases in a Testo suite of their own:
+`vendor/bin/testo --suite=Examples`.
