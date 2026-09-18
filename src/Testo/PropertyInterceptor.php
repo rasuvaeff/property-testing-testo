@@ -21,6 +21,7 @@ use Rasuvaeff\PropertyTesting\Runner\PropertyResult;
 use Rasuvaeff\PropertyTesting\Runner\PropertyRunner;
 use Rasuvaeff\PropertyTesting\Runner\RunStatistics;
 use Rasuvaeff\PropertyTesting\Runner\TimeBudgetExceeded;
+use Testo\Assert\ExpectException;
 use Testo\Common\Messenger;
 use Testo\Core\Context\TestInfo;
 use Testo\Core\Context\TestResult;
@@ -110,7 +111,19 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 ));
             }
 
+            if ($reflection->getAttributes(ExpectException::class, \ReflectionAttribute::IS_INSTANCEOF) !== []) {
+                // Testo's expectation interceptor runs outside this one and
+                // sees only the aggregate failure — a PropertyViolationException,
+                // which is a RuntimeException — so the expectation would be
+                // met by any falsification, an assertion failure included.
+                throw new \InvalidArgumentException(sprintf(
+                    '#[Property] on "%s" cannot be combined with #[ExpectException]; use throws: instead',
+                    $info->name,
+                ));
+            }
+
             $property = $attributes[0]->newInstance();
+            $this->validate($property, $info->name);
             $derandomize = EnvironmentOverrides::flag(getenv('PROPERTY_DERANDOMIZE')) ?? $property->derandomize;
             $path = $property->path ?? EnvironmentOverrides::string(getenv('PROPERTY_PATH'));
             $pinnedSeed = $property->seed ?? EnvironmentOverrides::seed(getenv('PROPERTY_SEED'));
@@ -167,13 +180,8 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             // in a previous exception.
             return new TestResult(info: $info, status: Status::Error, failure: $misconfiguration);
         } catch (\TypeError|\ValueError $misconfiguration) {
-            // The engine's own refusals are InvalidArgumentException, but PHP
-            // raises these two for the same class of mistake: an attribute
-            // argument of the wrong shape (`generators: [Provider::class,
-            // 'missingMethod']` is not a callable), a provider closure bound to
-            // nothing. Left uncaught they escape the pipeline and come back as
-            // Status::Aborted with "Error during test execution pipeline." on
-            // top and the real reason buried in `previous`.
+            // A provider invoked with the wrong arity, a closure bound to
+            // nothing: PHP's spelling of the same class of mistake.
             return new TestResult(info: $info, status: Status::Error, failure: new \InvalidArgumentException(
                 sprintf('#[Property] on "%s" cannot be set up: %s', $info->name, $misconfiguration->getMessage()),
                 previous: $misconfiguration,
@@ -186,7 +194,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             $listeners[] = new VerboseListener($this->messenger);
         }
 
-        $executor = new TestoTrialExecutor($info, \Closure::fromCallable($next));
+        $executor = new TestoTrialExecutor($info, \Closure::fromCallable($next), $property->throws);
         $result = $this->runner->run($definition, $executor, $listeners, $corpus);
 
         if ($executor->everyRunSkipped()) {
@@ -197,6 +205,34 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         }
 
         return $this->mapResult($info, $result, $executor->attributes());
+    }
+
+    /**
+     * The attribute is a data holder — Testo instantiates it long before this
+     * interceptor runs, so a constructor that threw would abort the pipeline
+     * with the reason buried in `previous`. The engine's config repeats these
+     * checks, but without the property's name.
+     */
+    private function validate(Property $property, string $name): void
+    {
+        $reason = match (true) {
+            $property->runs < 1 => 'runs must be greater than or equal to 1',
+            $property->maxShrinks !== null && $property->maxShrinks < 0 => 'maxShrinks must be greater than or equal to 0',
+            $property->maxDiscards !== null && $property->maxDiscards < 0 => 'maxDiscards must be greater than or equal to 0',
+            $property->timeoutMs !== null && $property->timeoutMs < 1 => 'timeoutMs must be greater than or equal to 1 millisecond',
+            $property->budgetMs !== null && $property->budgetMs < 1 => 'budgetMs must be greater than or equal to 1 millisecond',
+            $property->shrinkBudgetMs !== null && $property->shrinkBudgetMs < 1 => 'shrinkBudgetMs must be greater than or equal to 1 millisecond',
+            // The engine says the same thing, but the adapter draws a seed for
+            // an unseeded property before the engine sees it, and an
+            // environment seed replays a suite, not the run this path came from.
+            $property->path !== null && $property->seed === null => 'path replays a recorded descent and requires the seed it was recorded with',
+            $property->throws !== null && !is_a($property->throws, \Throwable::class, allow_string: true) => sprintf('throws names "%s", which is not a Throwable', $property->throws),
+            default => null,
+        };
+
+        if ($reason !== null) {
+            throw new \InvalidArgumentException(sprintf('#[Property] on "%s" cannot be set up: %s', $name, $reason));
+        }
     }
 
     /**
@@ -321,14 +357,10 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             $typed[(string) $name] = $generator;
         }
 
-        if (!$property->auto) {
-            return $typed;
-        }
-
-        // Under auto the provider is the overrides, and a key naming something
-        // the property does not take must be an error: merge semantics would
-        // otherwise silently replace a typoed entry with a signature-derived
-        // generator, and the property would run green in the wrong domain.
+        // A key naming something the property does not take is an error, with
+        // or without auto: ignored, a typoed entry leaves its parameter without
+        // a generator, and under auto merge semantics would silently replace
+        // it with a signature-derived one — green in the wrong domain.
         $parameters = [];
         foreach ($testMethod->getParameters() as $parameter) {
             $parameters[$parameter->getName()] = true;
@@ -343,6 +375,10 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                     $name,
                 ));
             }
+        }
+
+        if (!$property->auto) {
+            return $typed;
         }
 
         // The provider covers the parameters it names; the signature covers
@@ -411,10 +447,13 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         return $typed;
     }
 
+    /**
+     * @param \Closure|array<array-key, mixed>|string $provider
+     */
     private function resolveProvider(
         \ReflectionMethod $testMethod,
         TestInfo $info,
-        \Closure|string $provider,
+        \Closure|array|string $provider,
         string $kind,
     ): \Closure {
         if ($provider instanceof \Closure) {
@@ -422,6 +461,21 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         }
 
         $class = $testMethod->getDeclaringClass();
+
+        if (is_array($provider)) {
+            // The attribute keeps a non-callable array as written — the only
+            // array that reaches here — so that it is refused by name.
+            throw new \InvalidArgumentException(sprintf(
+                'Property "%s" references %s provider [%s] which is not a callable',
+                $testMethod->getName(),
+                $kind,
+                implode(', ', array_map(
+                    static fn(mixed $part): string => \is_string($part) ? sprintf('"%s"', $part) : get_debug_type($part),
+                    $provider,
+                )),
+            ));
+        }
+
         if ($class->hasMethod($provider)) {
             $method = $class->getMethod($provider);
 

@@ -18,8 +18,10 @@ use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\DeadlineFixture;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\DrawPropertyFixture;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\ExampleFailingFixture;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\ExhaustedFixture;
+use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\ExpectExceptionFixture;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\FalsifyingPropertyFixture;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\GaveUpFixture;
+use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\ThrowsFixture;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Support\CoreCompat;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Support\Env;
 use Testo\Assert;
@@ -121,6 +123,38 @@ final class PropertyRunnerE2ETest
         $result = TestRunner::runTest([AssumeDiscardFixture::class, 'holdsOnlyForPositiveValues']);
 
         Assert::same($result->status, Status::Passed);
+    }
+
+    public function anExpectExceptionAttributeNeverTurnsAFalsifiedPropertyGreen(): void
+    {
+        // Testo's expectation interceptor sits outside the property and sees
+        // only the aggregate PropertyViolationException — a RuntimeException —
+        // so the attribute used to be satisfied by the failed assertion. The
+        // combination is refused; whatever the outer interceptor makes of the
+        // refusal, the test is not a pass.
+        $result = TestRunner::runTest([ExpectExceptionFixture::class, 'expectsARuntimeExceptionButFailsAnAssertion']);
+
+        Assert::false($result->status->isSuccessful());
+        Assert::true($result->status === Status::Error || $result->status === Status::Failed);
+    }
+
+    public function throwsPassesABodyThatOnlyThrowsWithoutReportingItRisky(): void
+    {
+        // The body records no Testo assertion; the fulfilled expectation is
+        // recorded as one, the way Testo's own #[ExpectException] is, so the
+        // aggregate is Passed rather than Risky.
+        $result = TestRunner::runTest([ThrowsFixture::class, 'everyRunThrowsTheExpectedClass']);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    public function throwsFalsifiesABodyThatReturnsThroughTheRealRunner(): void
+    {
+        $result = TestRunner::runTest([ThrowsFixture::class, 'noRunThrows']);
+
+        Assert::true($result->status->isFailure());
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+        Assert::string($result->failure->getMessage())->contains('Expected DomainException to be thrown, but it was not');
     }
 
     public function failingExampleShortCircuitsThroughTheRealRunner(): void

@@ -10,6 +10,7 @@ use Rasuvaeff\PropertyTesting\Property;
 use Rasuvaeff\PropertyTesting\Runner\EdgeCases;
 use Rasuvaeff\PropertyTesting\Runner\Phase;
 use Rasuvaeff\PropertyTesting\Runner\ShrinkMode;
+use Testo\Assert\ExpectException;
 
 /**
  * Fixtures for {@see \Rasuvaeff\PropertyTesting\Testo\Tests\PropertyInterceptorTest}.
@@ -811,5 +812,138 @@ final class NoSeedShrinkPathStub
     public static function provide(): array
     {
         return ['x' => Gen::intBetween(0, 10_000)];
+    }
+}
+
+final class UnknownKeyStub
+{
+    #[Property(runs: 5, seed: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10), 'y' => Gen::constant(value: 7)];
+    }
+}
+
+final class ExpectExceptionStub
+{
+    #[Property(runs: 5, seed: 1, generators: 'provide')]
+    #[ExpectException(\RuntimeException::class)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class ThrowsStub
+{
+    #[Property(runs: 5, seed: 1, generators: 'provide', throws: \DomainException::class)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class ThrowsNonThrowableStub
+{
+    #[Property(runs: 5, seed: 1, generators: 'provide', throws: \stdClass::class)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class ZeroRunsStub
+{
+    #[Property(runs: 0, seed: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class NegativeMaxShrinksStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide', maxShrinks: -1)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class NegativeMaxDiscardsStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide', maxDiscards: -1)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class ZeroTimeoutStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide', timeoutMs: 0)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class ZeroBudgetStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide', budgetMs: 0)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class ZeroShrinkBudgetStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide', shrinkBudgetMs: 0)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class PathWithoutSeedStub
+{
+    #[Property(runs: 1, generators: 'provide', path: 'x:1')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
     }
 }

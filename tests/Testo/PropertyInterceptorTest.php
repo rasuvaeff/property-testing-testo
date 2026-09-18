@@ -46,6 +46,7 @@ use Testo\Core\Exception\SkipTest;
 use Testo\Core\Log\Message;
 use Testo\Core\Value\CaseInstance;
 use Testo\Core\Value\Status;
+use Testo\Data\DataProvider;
 use Testo\Lifecycle\AfterTest;
 use Testo\Lifecycle\BeforeTest;
 use Testo\Test;
@@ -241,17 +242,186 @@ final class PropertyInterceptorTest
         return $result->failure;
     }
 
-    public function anAttributeArgumentOfTheWrongShapeIsThisTestsErrorNotAnAbortedPipeline(): void
+    public function aNonCallableArrayProviderIsThisTestsErrorNotAnAbortedPipeline(): void
     {
-        // `[Provider::class, 'missingMethod']` is not a callable, so PHP raises
-        // a TypeError from newInstance() — outside the InvalidArgumentException
-        // the setup catch was written for. Uncaught it escapes the pipeline and
-        // comes back as Status::Aborted with "Error during test execution
-        // pipeline." on top and the reason buried in `previous`.
+        // `[Provider::class, 'missingMethod']` is not a callable. The attribute
+        // keeps it as written — Testo instantiates the attribute before this
+        // interceptor runs, and a constructor that threw would come back as
+        // Status::Aborted with "Error during test execution pipeline." on top
+        // and the reason buried in `previous`.
         $e = $this->misconfiguration(NonCallableArrayProviderStub::class);
 
-        Assert::string($e->getMessage())->contains('#[Property] on "check" cannot be set up');
-        Assert::instanceOf($e->getPrevious(), \TypeError::class);
+        Assert::string($e->getMessage())
+            ->contains('Property "check" references generators provider [')
+            ->contains('SharedCallableProvider", "missingMethod"] which is not a callable');
+    }
+
+    /**
+     * The attribute is a data holder; a value the engine would refuse is
+     * reported by the interceptor, naming the property, instead of aborting
+     * the pipeline from the attribute's constructor.
+     */
+    #[DataProvider('invalidAttributeValuesProvider')]
+    public function anInvalidAttributeValueIsThisTestsErrorNamingTheProperty(string $stub, string $reason): void
+    {
+        $e = $this->misconfiguration($stub);
+
+        Assert::same($e->getMessage(), '#[Property] on "check" cannot be set up: ' . $reason);
+    }
+
+    public static function invalidAttributeValuesProvider(): iterable
+    {
+        yield 'runs: 0' => [ZeroRunsStub::class, 'runs must be greater than or equal to 1'];
+        yield 'maxShrinks: -1' => [NegativeMaxShrinksStub::class, 'maxShrinks must be greater than or equal to 0'];
+        yield 'maxDiscards: -1' => [NegativeMaxDiscardsStub::class, 'maxDiscards must be greater than or equal to 0'];
+        yield 'timeoutMs: 0' => [ZeroTimeoutStub::class, 'timeoutMs must be greater than or equal to 1 millisecond'];
+        yield 'budgetMs: 0' => [ZeroBudgetStub::class, 'budgetMs must be greater than or equal to 1 millisecond'];
+        yield 'shrinkBudgetMs: 0' => [ZeroShrinkBudgetStub::class, 'shrinkBudgetMs must be greater than or equal to 1 millisecond'];
+        yield 'path without seed' => [PathWithoutSeedStub::class, 'path replays a recorded descent and requires the seed it was recorded with'];
+        yield 'throws: not a Throwable' => [ThrowsNonThrowableStub::class, 'throws names "stdClass", which is not a Throwable'];
+    }
+
+    public function anAttributePathWithoutAnAttributeSeedIsRefusedEvenWhenTheEnvironmentSeeds(): void
+    {
+        // PROPERTY_SEED replays a whole suite; the path describes one run and
+        // needs the seed that run had, which only the attribute can pin.
+        $restore = Env::setMany(['PROPERTY_SEED' => '7']);
+
+        try {
+            $e = $this->misconfiguration(PathWithoutSeedStub::class);
+
+            Assert::string($e->getMessage())->contains('requires the seed it was recorded with');
+        } finally {
+            $restore();
+        }
+    }
+
+    public function anExpectExceptionAttributeCombinedWithAPropertyIsAnError(): void
+    {
+        // Testo's expectation interceptor sits outside this one and sees only
+        // the aggregate PropertyViolationException — a RuntimeException — so
+        // `#[ExpectException(\RuntimeException::class)]` would be satisfied by
+        // any falsification, a failed assertion included.
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $runs = 0;
+        $next = static function (TestInfo $info) use (&$runs): TestResult {
+            ++$runs;
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(ExpectExceptionStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Error);
+        Assert::instanceOf($result->failure, \InvalidArgumentException::class);
+        Assert::same(
+            $result->failure->getMessage(),
+            '#[Property] on "check" cannot be combined with #[ExpectException]; use throws: instead',
+        );
+        Assert::same($runs, 0);
+    }
+
+    public function throwsPassesARunThatEndsWithTheExpectedException(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $runs = 0;
+        $next = static function (TestInfo $info) use (&$runs): TestResult {
+            ++$runs;
+
+            // What Testo's terminal handler returns for a body that threw.
+            return new TestResult(info: $info, status: Status::Error, failure: new \DomainException('as expected'));
+        };
+
+        $result = $interceptor->runTest($this->info(ThrowsStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+        Assert::same($runs, 5);
+    }
+
+    public function throwsAcceptsASubclassOfTheExpectedException(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $subclass = new class ('narrower') extends \DomainException {};
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Error, failure: $subclass);
+
+        $result = $interceptor->runTest($this->info(ThrowsStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    public function throwsFailsARunThatReturnsWithoutThrowing(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+
+        $result = $interceptor->runTest($this->info(ThrowsStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Failed);
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+        $cause = $result->failure->getCounterExample()->failure;
+        Assert::instanceOf($cause, \RuntimeException::class);
+        Assert::same($cause->getMessage(), 'Expected DomainException to be thrown, but it was not');
+        // The input that did not throw is a counterexample and shrinks like any other.
+        Assert::same($result->failure->getCounterExample()->shrunkArguments['x'], 1);
+    }
+
+    public function throwsFailsARunThatEndsWithAnotherException(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $other = new \LogicException('not the one');
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Error, failure: $other);
+
+        $result = $interceptor->runTest($this->info(ThrowsStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Failed);
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+        Assert::same($result->failure->getCounterExample()->failure, $other);
+    }
+
+    public function throwsPassesARunWhosePipelineThrewTheExpectedException(): void
+    {
+        // A hook or a downstream interceptor that throws reaches the executor
+        // as a throw rather than as a result; the expectation reads the same.
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static function (TestInfo $info): TestResult {
+            throw new \DomainException('from a hook');
+        };
+
+        $result = $interceptor->runTest($this->info(ThrowsStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    public function throwsLeavesASkippedRunSkipped(): void
+    {
+        // A skip is the environment's verdict about the run, never a pass
+        // earned by throwing — and a DomainException-expecting property whose
+        // every run skipped is a skipped test.
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Skipped, failure: new SkipTest('no database'));
+
+        $result = $interceptor->runTest($this->info(ThrowsStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Skipped);
+    }
+
+    public function throwsLeavesAnAssumeDiscardADiscard(): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $runs = 0;
+        $next = static function (TestInfo $info) use (&$runs): TestResult {
+            ++$runs;
+
+            return $runs === 1
+                ? new TestResult(info: $info, status: Status::Error, failure: new AssumptionSkipped('not this one'))
+                : new TestResult(info: $info, status: Status::Error, failure: new \DomainException('as expected'));
+        };
+
+        $result = $interceptor->runTest($this->info(ThrowsStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+        // Five successful checks plus the one discard.
+        Assert::same($runs, 6);
     }
 
     public function aNonStaticProviderWithoutATestCaseInstanceNamesItself(): void
@@ -2382,6 +2552,18 @@ final class PropertyInterceptorTest
         Assert::string($e->getMessage())->contains('Property "check"');
         Assert::string($e->getMessage())->contains('covers "y"');
         Assert::string($e->getMessage())->contains('not a parameter');
+    }
+
+    public function withoutAutoAProviderKeyThatIsNotAParameterIsRefusedToo(): void
+    {
+        // Ignored, a typoed key leaves its parameter without a generator and
+        // the message that follows names the engine, not the provider.
+        $e = $this->misconfiguration(UnknownKeyStub::class);
+
+        Assert::string($e->getMessage())
+            ->contains('Property "check"')
+            ->contains('generators method "provide" covers "y"')
+            ->contains('not a parameter');
     }
 
     public function withoutAutoAMissingProviderStillFailsWithTheEstablishedMessage(): void

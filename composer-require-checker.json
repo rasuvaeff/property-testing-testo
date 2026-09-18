@@ -1,5 +1,7 @@
 {
     "symbol-whitelist": [
+        "Testo\\Assert",
+        "Testo\\Assert\\ExpectException",
         "Testo\\Codecov\\Result\\CoverageResult"
     ],
     "php-core-extensions": [
