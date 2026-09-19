@@ -22,6 +22,8 @@ use Rasuvaeff\PropertyTesting\Runner\PropertyRunner;
 use Rasuvaeff\PropertyTesting\Runner\RunStatistics;
 use Rasuvaeff\PropertyTesting\Runner\TimeBudgetExceeded;
 use Testo\Assert\ExpectException;
+use Testo\Assert\State\Assertion\AssertionException;
+use Testo\Assert\State\Expectation\ExpectationFailed;
 use Testo\Common\Messenger;
 use Testo\Core\Context\TestInfo;
 use Testo\Core\Context\TestResult;
@@ -227,6 +229,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             // environment seed replays a suite, not the run this path came from.
             $property->path !== null && $property->seed === null => 'path replays a recorded descent and requires the seed it was recorded with',
             $property->throws !== null && !is_a($property->throws, \Throwable::class, allow_string: true) => sprintf('throws names "%s", which is not a Throwable', $property->throws),
+            $property->throws !== null && (is_a(AssertionException::class, $property->throws, allow_string: true) || is_a(ExpectationFailed::class, $property->throws, allow_string: true)) => sprintf('throws names "%s", which a failed assertion is an instance of — a falsified body would pass; name the exception the body throws', $property->throws),
             default => null,
         };
 
