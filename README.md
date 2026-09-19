@@ -194,6 +194,12 @@ Semantics, per run:
   but it was not`, and the input shrinks like any other counterexample.
 - Throws another class — that throw is the failure, exactly as it would be
   without `throws:`.
+- A failed assertion is never the expected throw. Testo's assertion
+  failures extend `\LogicException`, so `throws:` naming a class they are
+  an instance of — `\LogicException`, `\Exception`, `\Throwable` — is
+  refused when the property is set up (`a failed assertion is an instance
+  of`); name the exception the body throws. A failing `Assert` inside the
+  body fails the run whatever class was expected.
 - A `SkipTest` from the body or a hook still skips the run, and an
   `Assume::that()` discard still discards it: the environment's verdict about
   the run is never a pass earned by throwing.

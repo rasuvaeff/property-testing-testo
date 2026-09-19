@@ -32,6 +32,8 @@ use Rasuvaeff\PropertyTesting\Testo\Tests\Support\Env;
 use Rasuvaeff\PropertyTesting\TimeBudgetExceededException;
 use Testo\Application\Internal\MessengerHub;
 use Testo\Assert;
+use Testo\Assert\State\Assertion\AssertionException;
+use Testo\Assert\State\Expectation\ExpectationFailed;
 use Testo\Codecov\Covers;
 use Testo\Codecov\Result\CoverageResult;
 use Testo\Common\Messenger;
@@ -279,6 +281,8 @@ final class PropertyInterceptorTest
         yield 'shrinkBudgetMs: 0' => [ZeroShrinkBudgetStub::class, 'shrinkBudgetMs must be greater than or equal to 1 millisecond'];
         yield 'path without seed' => [PathWithoutSeedStub::class, 'path replays a recorded descent and requires the seed it was recorded with'];
         yield 'throws: not a Throwable' => [ThrowsNonThrowableStub::class, 'throws names "stdClass", which is not a Throwable'];
+        yield 'throws: a class a failed assertion is an instance of' => [ThrowsExceptionStub::class, 'throws names "Exception", which a failed assertion is an instance of — a falsified body would pass; name the exception the body throws'];
+        yield 'throws: LogicException, the assertion base' => [ThrowsLogicExceptionStub::class, 'throws names "LogicException", which a failed assertion is an instance of — a falsified body would pass; name the exception the body throws'];
     }
 
     public function anAttributePathWithoutAnAttributeSeedIsRefusedEvenWhenTheEnvironmentSeeds(): void
@@ -1064,6 +1068,35 @@ final class PropertyInterceptorTest
 
         Assert::true($outcome->isSkipped());
         Assert::true($outcome->isDiscarded());
+    }
+
+    /**
+     * The executor's half of #61: the interceptor refuses a class the
+     * assertion failure is an instance of, and the executor holds the same
+     * line for one it was handed anyway — a failed `Assert` is the run's
+     * failure, never the expected throw.
+     */
+    #[DataProvider('assertionFailureProvider')]
+    public function aFailedAssertIsNeverTheExpectedThrow(\Throwable $failure): void
+    {
+        $executor = new TestoTrialExecutor(
+            $this->info(PassingStub::class, 'check'),
+            static function (TestInfo $info) use ($failure): TestResult {
+                throw $failure;
+            },
+            \LogicException::class,
+        );
+
+        $outcome = $executor->execute(['x' => 1]);
+
+        Assert::true($outcome->isFailed());
+        Assert::same($outcome->failure, $failure);
+    }
+
+    public static function assertionFailureProvider(): iterable
+    {
+        yield 'an assertion' => [new AssertionException('1', 'is exactly `2`', '', 'expected `2`, got `1`', '')];
+        yield 'an expectation' => [new ExpectationFailed('an exception is thrown', '', 'nothing was thrown', '')];
     }
 
     public function aHookThatCancelsSkipsThePropertyToo(): void

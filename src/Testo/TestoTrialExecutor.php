@@ -8,6 +8,8 @@ use Rasuvaeff\PropertyTesting\AssumptionSkipped;
 use Rasuvaeff\PropertyTesting\Runner\TrialExecutor;
 use Rasuvaeff\PropertyTesting\Runner\TrialOutcome;
 use Testo\Assert;
+use Testo\Assert\State\Assertion\AssertionException;
+use Testo\Assert\State\Expectation\ExpectationFailed;
 use Testo\Codecov\Result\CoverageResult;
 use Testo\Core\Context\TestInfo;
 use Testo\Core\Context\TestResult;
@@ -136,7 +138,12 @@ final class TestoTrialExecutor implements TrialExecutor
             )));
         }
 
-        if (!$failure instanceof $this->expectedExceptionClass) {
+        // A failed assertion is the run's failure whatever class was
+        // expected: `Assert` failures are ordinary exceptions, so a wide
+        // `throws:` would otherwise match one and pass a falsified body.
+        // The interceptor refuses such a class up front; this is the same
+        // rule where the class was narrower than the failure's real type.
+        if (!$failure instanceof $this->expectedExceptionClass || $failure instanceof AssertionException || $failure instanceof ExpectationFailed) {
             return TrialOutcome::failed($failure);
         }
 

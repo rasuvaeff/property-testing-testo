@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.11.2 — 2026-09-19
+
+- **Fixed.** A wide `throws:` swallowed a failed assertion: Testo's
+  `AssertionException` and `ExpectationFailed` extend `\LogicException`, so
+  `throws: \LogicException::class` — or `\Exception`, `\Throwable` —
+  matched a failing `Assert` in the body and the property passed on a
+  falsified body, the T-1 of 0.11.0 on the new knob. The interceptor
+  refuses such a class when the property is set up, naming why; the
+  executor never takes an assertion failure for the expected throw,
+  whatever class was named (#61). `testo/assert` is a direct requirement,
+  as the executor now reads its types.
+
 ## 0.11.1 — 2026-09-19
 
 - **Changed.** Accepts `rasuvaeff/property-testing-core` `^0.11` alongside `^0.9`/`^0.10`. Nothing in 0.11.0 reaches this package: the release is additive (the `PropertyTestingException` marker, `AssumptionSkipped` promoted to `@api`, `Gen::stringOf()` defaults, docblock reading in `Gen::forClass()`), and the suite is green against it unchanged.

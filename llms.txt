@@ -58,11 +58,14 @@ installation fails at resolution time.
   subclass) = pass, recorded as an assertion (a body that only throws is not
   risky); returns normally = fail `Expected <class> to be thrown, but it was
   not`, shrunk like any counterexample; another class = that failure; a skip
-  or an `Assume::that()` discard keep their meaning.
+  or an `Assume::that()` discard keep their meaning; a failed `Assert` is
+  never the expected throw, and a class Testo's assertion failures are an
+  instance of (`\LogicException`, `\Exception`, `\Throwable`) is refused.
+
 - The attribute validates nothing (Testo instantiates it before the
   interceptor runs); `runs: 0`, a negative cap, `path` without `seed`, a
   non-callable `[Cls::class, 'missing']` provider, a non-Throwable `throws`
-  are reported by the interceptor as `#[Property] on "<method>" cannot be set
+  or one a failed assertion is an instance of are reported by the interceptor as `#[Property] on "<method>" cannot be set
   up: …` — an error of that test, never an aborted pipeline.
 
 ## API

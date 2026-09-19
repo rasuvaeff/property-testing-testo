@@ -864,6 +864,30 @@ final class ThrowsNonThrowableStub
     }
 }
 
+final class ThrowsExceptionStub
+{
+    #[Property(runs: 5, seed: 1, generators: 'provide', throws: \Exception::class)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class ThrowsLogicExceptionStub
+{
+    #[Property(runs: 5, seed: 1, generators: 'provide', throws: \LogicException::class)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
 final class ZeroRunsStub
 {
     #[Property(runs: 0, seed: 1, generators: 'provide')]
