@@ -143,10 +143,10 @@ public static function additionCommutesExamples(): array
 |---|---|---|
 | `PROPERTY_RUNS` | positive int | Overrides every property's run count, including the attribute's |
 | `PROPERTY_SEED` | int | Seeds every property whose attribute omits `seed`; attribute wins |
-| `PROPERTY_VERBOSE` | off for `''`, `0`, `false`, `off`, `no` (case-insensitive, trimmed); anything else enables (core 0.9: only `''`/`0` disabled) | Logs each run's arguments and each accepted shrink step |
+| `PROPERTY_VERBOSE` | off for `''`, `0`, `false`, `off`, `no` (case-insensitive, trimmed); anything else enables | Logs each run's arguments and each accepted shrink step |
 | `PROPERTY_DB` | directory path OR `redis://host[:port][/db][?prefix=key-prefix]` (`rediss://` = TLS; parsed by core `CorpusFactory`) | Regression corpus: record on falsification, replay before the random phase, prune on green replay. A DSN builds a RedisCorpus (ext-redis preferred, else predis; neither installed THROWS) — same document as the directory form, shared between CI and developers |
 | `PROPERTY_PHASES` | `examples,corpus,random,shrink` (comma-separated, case-insensitive) | Stages to run; OVERRIDES the attribute; unknown name throws |
-| `PROPERTY_DERANDOMIZE` | `''` = attribute wins; `0`, `false`, `off`, `no` (case-insensitive, trimmed) force off; anything else forces on (core 0.9: only `0` was falsy) | Unset seeds derived from the property id; OVERRIDES the attribute; an attribute `seed` still wins |
+| `PROPERTY_DERANDOMIZE` | `''` = attribute wins; `0`, `false`, `off`, `no` (case-insensitive, trimmed) force off; anything else forces on | Unset seeds derived from the property id; OVERRIDES the attribute; an attribute `seed` still wins |
 | `PROPERTY_PATH` | recorded `CounterExample::$path` | Replays that descent; needs the seed of that run; an attribute `path` wins |
 | `PROPERTY_EDGE_CASES` | `mixin` \| `none` (case-insensitive) | Numeric boundary bias; OVERRIDES the attribute; unknown value throws |
 | `PROPERTY_EXHAUSTIVE` | flag (same words as `PROPERTY_DERANDOMIZE`) | Exhaustive mode for the suite; OVERRIDES the attribute |
