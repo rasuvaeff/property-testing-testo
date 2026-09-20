@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.0 — 2026-09-20
+
+The stability release, in step with `rasuvaeff/property-testing-core` 1.0.0.
+The adapter's surface is that of 0.12.0, unchanged: `#[Property]` with its
+knobs, `PropertyInterceptor`, `TestoTrialExecutor`, `VerboseListener`, the
+environment table and the drop-in contract with the frozen
+`rasuvaeff/property-testing` 2.8. A project on `^0.12` upgrades by widening
+the constraint to `^1.0`.
+
+- Requires `rasuvaeff/property-testing-core` `^1.0` (compatibility policy
+  §8: a caret on the engine's current major).
+- **Docs:** the footnotes that dated a behaviour to a core 0.x release
+  (`since core 0.9`, `under core 0.9 …`) are gone from the READMEs and
+  `llms.txt` — every 1.0 install has the current behaviour.
+
 ## 0.12.0 — 2026-09-20
 
 - **Added:** the core 0.12 knobs on `#[Property]` — `exhaustive` /

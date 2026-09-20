@@ -56,8 +56,8 @@ mixed installation rather than let two copies of the namespace collide.
 ## Requirements
 
 - PHP 8.3+
-- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^0.12`
-- [`testo/testo`](https://packagist.org/packages/testo/testo) `^0.10.39 || ^1.0`
+- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^1.0`
+- [`testo/testo`](https://packagist.org/packages/testo/testo) `^0.10.39`
 
 ## Installation
 
@@ -164,8 +164,8 @@ What the adapter does and does not combine with:
   it.
 - **A `SkipTest` thrown from the body or a hook skips the run**; when every
   run skipped, the property is reported as a skipped test. Partly skipped runs
-  spend a budget of their own, separate from `maxDiscards`: since core 0.9 a
-  skip is not a discard, and when that budget runs out the message names the
+  spend a budget of their own, separate from `maxDiscards`: a skip is not a
+  discard, and when that budget runs out the message names the
   environment rather than advising narrower generators. Unlike an
   `Assume::that()` discard, a skip says nothing about the input, so a recorded
   regression whose replay only skipped stays in the corpus instead of being
@@ -343,10 +343,10 @@ what the attribute wrote down.
 |---|---|
 | `PROPERTY_RUNS` | Positive integer that overrides every property's run count (dial runs up in CI) |
 | `PROPERTY_SEED` | Integer seed for any property whose attribute omits `seed` (replay a whole suite). An explicit attribute `seed` still wins |
-| `PROPERTY_VERBOSE` | Logs every run's generated arguments and each accepted shrink step. Off for `''`, `0`, `false`, `off` and `no` (case-insensitive, trimmed); anything else enables. Under core 0.9 only `''` and `0` disabled — `false` enabled the trace |
+| `PROPERTY_VERBOSE` | Logs every run's generated arguments and each accepted shrink step. Off for `''`, `0`, `false`, `off` and `no` (case-insensitive, trimmed); anything else enables. |
 | `PROPERTY_DB` | Directory path enabling the regression corpus, or a `redis://host[:port][/db][?prefix=key-prefix]` DSN (`rediss://` for TLS) for a corpus shared between CI and developers. Unset means off, nothing is written |
 | `PROPERTY_PHASES` | Comma-separated stage list (`examples,corpus,random,shrink`, case-insensitive) that overrides the attribute — an unknown name throws rather than skipping a stage. `examples,corpus` is the fast pull-request gate |
-| `PROPERTY_DERANDOMIZE` | Derives every unset seed from the property id, making a whole suite reproducible without editing it. `''` leaves the attribute alone; `0`, `false`, `off` and `no` (case-insensitive, trimmed) force it off, overriding `derandomize: true`; anything else forces it on. Under core 0.9 only `0` was a falsy word |
+| `PROPERTY_DERANDOMIZE` | Derives every unset seed from the property id, making a whole suite reproducible without editing it. `''` leaves the attribute alone; `0`, `false`, `off` and `no` (case-insensitive, trimmed) force it off, overriding `derandomize: true`; anything else forces it on. |
 | `PROPERTY_PATH` | A recorded shrink descent replayed instead of searched for. **Requires a pinned seed** — `PROPERTY_SEED` or the attribute's — and is refused without one, because an unseeded property gets a random seed and the path would replay a run that never happened. An attribute `path` wins. It describes one failure, so run it with a filter on that one test — every other property would report the path as stale |
 | `PROPERTY_EDGE_CASES` | `mixin` or `none` (case-insensitive) — the numeric boundary bias for the whole suite, overriding the attribute. An unknown value throws |
 | `PROPERTY_EXHAUSTIVE` | Turns exhaustive mode on for every property whose domain fits its budget (a nightly that proves the small domains). The same words as `PROPERTY_DERANDOMIZE` switch it off |
