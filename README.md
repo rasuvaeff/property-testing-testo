@@ -56,7 +56,7 @@ mixed installation rather than let two copies of the namespace collide.
 ## Requirements
 
 - PHP 8.3+
-- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^0.9 || ^0.10 || ^0.11`
+- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^0.12`
 - [`testo/testo`](https://packagist.org/packages/testo/testo) `^0.10.39 || ^1.0`
 
 ## Installation
@@ -326,6 +326,10 @@ Rules worth knowing:
 | `edgeCases` | `EdgeCases::None` turns off the numeric boundary bias — for a property the edges only cost runs |
 | `auto` | Derives generators from the property's signature for every parameter the provider does not cover; the provider becomes partial overrides. Off by default, and stays off |
 | `throws` | The exception class every run must throw — a run that throws it passes, one that returns normally or throws another class fails and shrinks. The per-run replacement for `#[ExpectException]`, which is refused on a property |
+| `exhaustive` | Walk the whole parameter domain instead of sampling it when every generator is `Enumerable` and the product fits `exhaustiveBudget`; otherwise the phase samples and a warning says why. `runs` is ignored when it walks — see the [core README](https://github.com/rasuvaeff/property-testing-core#exhaustive-mode) |
+| `exhaustiveBudget` | The largest domain `exhaustive` walks (default 10 000) |
+| `flakyReplays` | Re-executions of the minimised counterexample (default 2); one that passes marks the counterexample flaky, with a `Flaky:` line in the failure. `0` disables — see [flaky detection](https://github.com/rasuvaeff/property-testing-core#flaky-detection) |
+| `searchRuns` | Bodies the targeted search may execute after the random phase, for a body that calls `Target::maximize()`/`minimize()` (default 0 — no search) — see [targeted search](https://github.com/rasuvaeff/property-testing-core#targeted-search-target) |
 
 ### Environment overrides
 
@@ -345,6 +349,8 @@ what the attribute wrote down.
 | `PROPERTY_DERANDOMIZE` | Derives every unset seed from the property id, making a whole suite reproducible without editing it. `''` leaves the attribute alone; `0`, `false`, `off` and `no` (case-insensitive, trimmed) force it off, overriding `derandomize: true`; anything else forces it on. Under core 0.9 only `0` was a falsy word |
 | `PROPERTY_PATH` | A recorded shrink descent replayed instead of searched for. **Requires a pinned seed** — `PROPERTY_SEED` or the attribute's — and is refused without one, because an unseeded property gets a random seed and the path would replay a run that never happened. An attribute `path` wins. It describes one failure, so run it with a filter on that one test — every other property would report the path as stale |
 | `PROPERTY_EDGE_CASES` | `mixin` or `none` (case-insensitive) — the numeric boundary bias for the whole suite, overriding the attribute. An unknown value throws |
+| `PROPERTY_EXHAUSTIVE` | Turns exhaustive mode on for every property whose domain fits its budget (a nightly that proves the small domains). The same words as `PROPERTY_DERANDOMIZE` switch it off |
+| `PROPERTY_SEARCH_RUNS` | Non-negative integer overriding every property's `searchRuns` — give the targeted search a bigger budget on a nightly, or `0` to switch it off. A malformed value throws |
 
 ### Regression corpus
 
@@ -416,6 +422,20 @@ public static function stackBehavesLikeItsModelGenerators(): array
 
 See [`examples/state_machine.php`](examples/state_machine.php) for the full
 runnable stack example.
+
+The rule-based façade works the same way — `#[Rule]`, `#[Precondition]` and
+`#[Invariant]` on one machine class, `Gen::rules(QueueMachine::class)` as the
+generator, and `$sequence->run(static fn () => new QueueMachine(new Queue()))`
+in the body; the engine's
+[README](https://github.com/rasuvaeff/property-testing-core#rule-based-machines-genrules)
+has the full example.
+
+The interceptor reports what the engine measured beside the distribution
+line: each `Classify::tabulate()` table with its tag shares and the pairs hit
+together, whether exhaustive mode walked the domain or why it sampled, and
+the search report (`evaluations`, per label the best score and the number of
+improvements). `PROPERTY_VERBOSE` also logs every `TargetImproved` event with
+the input that scored it.
 
 ### Generators
 

@@ -10,6 +10,7 @@ use Rasuvaeff\PropertyTesting\Event\RunFailed;
 use Rasuvaeff\PropertyTesting\Event\RunPassed;
 use Rasuvaeff\PropertyTesting\Event\RunStarted;
 use Rasuvaeff\PropertyTesting\Event\ShrinkAccepted;
+use Rasuvaeff\PropertyTesting\Event\TargetImproved;
 use Rasuvaeff\PropertyTesting\PropertyListener;
 use Rasuvaeff\PropertyTesting\ValueRenderer;
 use Testo\Common\Messenger;
@@ -53,6 +54,16 @@ final readonly class VerboseListener implements PropertyListener
                         $this->formatArguments($event->draws),
                     ));
                 }
+            } elseif ($event instanceof TargetImproved) {
+                $this->log(sprintf(
+                    'Property "%s" target %s %s: %s -> %s (%s)',
+                    $this->name($event->propertyId),
+                    $event->label,
+                    $event->direction->value === 'maximize' ? 'max' : 'min',
+                    $event->previous === null ? '-' : ValueRenderer::render($event->previous),
+                    ValueRenderer::render($event->score),
+                    $this->formatArguments($event->arguments),
+                ));
             } elseif ($event instanceof ShrinkAccepted) {
                 $this->log(sprintf(
                     'Property "%s" shrink step %d: %s=%s -> %s',

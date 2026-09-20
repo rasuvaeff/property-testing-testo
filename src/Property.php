@@ -104,6 +104,18 @@ final readonly class Property implements Interceptable
      *        the per-run replacement for `#[ExpectException]`, which observes the aggregate result
      *        and is refused on a property. The matching throw is recorded as an assertion, so a
      *        body that asserts nothing else is not reported as risky.
+     * @param bool $exhaustive Walk the whole parameter domain instead of sampling it, when every
+     *        generator has a finite domain (`Enumerable`) and the product fits $exhaustiveBudget;
+     *        otherwise the phase samples and the report says why. `runs` is ignored when it walks.
+     *        `PROPERTY_EXHAUSTIVE` turns it on for the suite.
+     * @param int $exhaustiveBudget The largest domain $exhaustive walks; at least 1.
+     * @param int $flakyReplays Re-executions of the minimised counterexample after the descent; one
+     *        that passes marks the counterexample flaky (a `Flaky:` line names the replay). 0
+     *        disables the check.
+     * @param int $searchRuns Bodies the targeted search may execute after the random phase, for a
+     *        body that calls `Target::maximize()`/`minimize()`: the best-scoring inputs are mutated
+     *        one parameter at a time. 0 (the default) performs no search. `PROPERTY_SEARCH_RUNS`
+     *        overrides it for the suite.
      */
     public function __construct(
         public int $runs = 100,
@@ -125,6 +137,10 @@ final readonly class Property implements Interceptable
         // after it, and every attribute passing them positionally would
         // silently mean something else. New parameters append here.
         public ?string $throws = null,
+        public bool $exhaustive = false,
+        public int $exhaustiveBudget = 10_000,
+        public int $flakyReplays = 2,
+        public int $searchRuns = 0,
     ) {
         // A data holder: every value is validated by the interceptor, which
         // can name the property. Testo instantiates the attribute long before

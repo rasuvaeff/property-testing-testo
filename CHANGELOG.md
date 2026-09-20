@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.12.0 — 2026-09-20
+
+- **Added:** the core 0.12 knobs on `#[Property]` — `exhaustive` /
+  `exhaustiveBudget` (walk the parameter domain instead of sampling it),
+  `flakyReplays` (re-execute the minimised counterexample; a passing replay
+  is reported as flaky) and `searchRuns` (targeted search after the random
+  phase for a body that calls `Target::maximize()`/`minimize()`); the
+  interceptor refuses an out-of-range value by name like the other knobs.
+- **Added:** `PROPERTY_EXHAUSTIVE` (a flag) and `PROPERTY_SEARCH_RUNS` (a
+  non-negative integer, `0` switches the search off) dial the suite, the way
+  `PROPERTY_DERANDOMIZE` and `PROPERTY_RUNS` do.
+- **Added:** the interceptor reports every `Classify::tabulate()` table with
+  its pairwise intersections, whether exhaustive mode walked the domain (or
+  why it sampled, as a warning), and the search report, beside the
+  distribution line; `PROPERTY_VERBOSE` logs every `TargetImproved` event.
+- Requires `rasuvaeff/property-testing-core` `^0.12`; the
+  `tests/Support/CoreCompat` shim that spanned the 0.9–0.11 lines is gone.
+
 ## 0.11.2 — 2026-09-19
 
 - **Fixed.** A wide `throws:` swallowed a failed assertion: Testo's

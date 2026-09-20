@@ -12,15 +12,20 @@ use Rasuvaeff\PropertyTesting\Runner\Clock;
 use Rasuvaeff\PropertyTesting\Runner\Corpus;
 use Rasuvaeff\PropertyTesting\Runner\CorpusFactory;
 use Rasuvaeff\PropertyTesting\Runner\CoverageFailed;
+use Rasuvaeff\PropertyTesting\Runner\DistributionReport;
 use Rasuvaeff\PropertyTesting\Runner\EnvironmentOverrides;
 use Rasuvaeff\PropertyTesting\Runner\GaveUp;
+use Rasuvaeff\PropertyTesting\Runner\LabelShare;
 use Rasuvaeff\PropertyTesting\Runner\Passed;
 use Rasuvaeff\PropertyTesting\Runner\PropertyConfig;
 use Rasuvaeff\PropertyTesting\Runner\PropertyDefinition;
 use Rasuvaeff\PropertyTesting\Runner\PropertyResult;
 use Rasuvaeff\PropertyTesting\Runner\PropertyRunner;
 use Rasuvaeff\PropertyTesting\Runner\RunStatistics;
+use Rasuvaeff\PropertyTesting\Runner\SearchReport;
+use Rasuvaeff\PropertyTesting\Runner\TargetOutcome;
 use Rasuvaeff\PropertyTesting\Runner\TimeBudgetExceeded;
+use Rasuvaeff\PropertyTesting\ValueRenderer;
 use Testo\Assert\ExpectException;
 use Testo\Assert\State\Assertion\AssertionException;
 use Testo\Assert\State\Expectation\ExpectationFailed;
@@ -168,6 +173,12 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                     derandomize: $derandomize,
                     path: $path,
                     edgeCases: EnvironmentOverrides::edgeCases(getenv('PROPERTY_EDGE_CASES')) ?? $property->edgeCases,
+                    // Both suite dials as well: enumerate everything small on
+                    // a nightly, or give the search a bigger budget there.
+                    exhaustive: EnvironmentOverrides::flag(getenv('PROPERTY_EXHAUSTIVE')) ?? $property->exhaustive,
+                    exhaustiveBudget: $property->exhaustiveBudget,
+                    flakyReplays: $property->flakyReplays,
+                    searchRuns: EnvironmentOverrides::count('PROPERTY_SEARCH_RUNS', getenv('PROPERTY_SEARCH_RUNS')) ?? $property->searchRuns,
                 ),
                 examples: $this->resolveExamples($reflection, $info, $property),
                 // A pinned attribute seed wins over the corpus: replaying recorded
@@ -224,6 +235,9 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             $property->timeoutMs !== null && $property->timeoutMs < 1 => 'timeoutMs must be greater than or equal to 1 millisecond',
             $property->budgetMs !== null && $property->budgetMs < 1 => 'budgetMs must be greater than or equal to 1 millisecond',
             $property->shrinkBudgetMs !== null && $property->shrinkBudgetMs < 1 => 'shrinkBudgetMs must be greater than or equal to 1 millisecond',
+            $property->exhaustiveBudget < 1 => 'exhaustiveBudget must be greater than or equal to 1',
+            $property->flakyReplays < 0 => 'flakyReplays must be greater than or equal to 0',
+            $property->searchRuns < 0 => 'searchRuns must be greater than or equal to 0',
             // The engine says the same thing, but the adapter draws a seed for
             // an unseeded property before the engine sees it, and an
             // environment seed replays a suite, not the run this path came from.
@@ -271,6 +285,9 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         if ($statistics instanceof RunStatistics) {
             $this->warnOnExcessiveSkips($info->name, $statistics->discards, $statistics->attempts);
             $this->reportClassifications($info->name, $statistics->classifications, $statistics->checks);
+            $this->reportTables($info->name, $statistics);
+            $this->reportExhaustive($info->name, $statistics);
+            $this->reportSearch($info->name, $statistics);
         }
 
         $failure = $result->failure();
@@ -556,6 +573,90 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         $this->messenger->log(
             Messenger::CHANNEL_STDERR,
             sprintf('Property "%s" distribution: %s', $name, implode(', ', $parts)),
+            Level::Info,
+        );
+    }
+
+    /**
+     * One line per `Classify::tabulate()` table: the tag shares, then the
+     * pairwise intersections when any pair was hit — the observability half
+     * of the classify/cover split, on the same channel as the distribution.
+     */
+    private function reportTables(string $name, RunStatistics $statistics): void
+    {
+        if ($statistics->checks <= 0) {
+            return;
+        }
+
+        $report = DistributionReport::of($statistics, coverageAssessed: true);
+
+        foreach ($report->tables as $table => $shares) {
+            $parts = array_map(
+                static fn(LabelShare $share): string => sprintf('%s %d%% (%d/%d)', $share->label, (int) round($share->percent), $share->count, $report->checks),
+                $shares,
+            );
+            $pairs = array_map(
+                static fn(LabelShare $share): string => sprintf('%s %d%% (%d/%d)', $share->label, (int) round($share->percent), $share->count, $report->checks),
+                $report->intersections[$table] ?? [],
+            );
+
+            $this->messenger->log(
+                Messenger::CHANNEL_STDERR,
+                sprintf('Property "%s" table %s: %s', $name, $table, implode(', ', $parts))
+                    . ($pairs === [] ? '' : sprintf('; together: %s', implode(', ', $pairs))),
+                Level::Info,
+            );
+        }
+    }
+
+    /**
+     * What exhaustive mode did, for a property that asked for it: the domain
+     * it walked, or why it sampled instead.
+     */
+    private function reportExhaustive(string $name, RunStatistics $statistics): void
+    {
+        if ($statistics->domainSize !== null) {
+            $this->messenger->log(
+                Messenger::CHANNEL_STDERR,
+                sprintf('Property "%s" enumerated its whole domain of %d input(s)', $name, $statistics->domainSize),
+                Level::Info,
+            );
+        } elseif ($statistics->exhaustiveDeclined !== null) {
+            $this->messenger->log(
+                Messenger::CHANNEL_STDERR,
+                sprintf('Property "%s" could not enumerate its domain and sampled instead: %s', $name, $statistics->exhaustiveDeclined),
+                Level::Warning,
+            );
+        }
+    }
+
+    /**
+     * The search report: how many bodies the search phase executed and where
+     * every `Target` label ended up.
+     */
+    private function reportSearch(string $name, RunStatistics $statistics): void
+    {
+        $search = $statistics->search;
+
+        if (!$search instanceof SearchReport) {
+            return;
+        }
+
+        $parts = array_map(
+            static fn(TargetOutcome $target): string => sprintf(
+                '%s %s %s (%d improvement(s)%s)',
+                $target->label,
+                $target->direction->value === 'maximize' ? 'max' : 'min',
+                $target->best === null ? '-' : ValueRenderer::render($target->best),
+                $target->improvements,
+                $target->recalled > 0 ? sprintf(', %d recalled', $target->recalled) : '',
+            ),
+            $search->targets,
+        );
+
+        $this->messenger->log(
+            Messenger::CHANNEL_STDERR,
+            sprintf('Property "%s" search: %d evaluation(s); %s', $name, $search->evaluations, implode(', ', $parts)),
             Level::Info,
         );
     }

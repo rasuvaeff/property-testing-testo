@@ -24,10 +24,10 @@ use Rasuvaeff\PropertyTesting\Runner\FilesystemCorpus;
 use Rasuvaeff\PropertyTesting\Runner\PropertyRunner;
 use Rasuvaeff\PropertyTesting\Runner\RegressionFailed;
 use Rasuvaeff\PropertyTesting\Runner\TimeBudgetExceeded;
+use Rasuvaeff\PropertyTesting\Target;
 use Rasuvaeff\PropertyTesting\Testo\PropertyInterceptor;
 use Rasuvaeff\PropertyTesting\Testo\TestoTrialExecutor;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Support\CollectingListener;
-use Rasuvaeff\PropertyTesting\Testo\Tests\Support\CoreCompat;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Support\Env;
 use Rasuvaeff\PropertyTesting\TimeBudgetExceededException;
 use Testo\Application\Internal\MessengerHub;
@@ -279,6 +279,9 @@ final class PropertyInterceptorTest
         yield 'timeoutMs: 0' => [ZeroTimeoutStub::class, 'timeoutMs must be greater than or equal to 1 millisecond'];
         yield 'budgetMs: 0' => [ZeroBudgetStub::class, 'budgetMs must be greater than or equal to 1 millisecond'];
         yield 'shrinkBudgetMs: 0' => [ZeroShrinkBudgetStub::class, 'shrinkBudgetMs must be greater than or equal to 1 millisecond'];
+        yield 'exhaustiveBudget: 0' => [ZeroExhaustiveBudgetStub::class, 'exhaustiveBudget must be greater than or equal to 1'];
+        yield 'flakyReplays: -1' => [NegativeFlakyReplaysStub::class, 'flakyReplays must be greater than or equal to 0'];
+        yield 'searchRuns: -1' => [NegativeSearchRunsStub::class, 'searchRuns must be greater than or equal to 0'];
         yield 'path without seed' => [PathWithoutSeedStub::class, 'path replays a recorded descent and requires the seed it was recorded with'];
         yield 'throws: not a Throwable' => [ThrowsNonThrowableStub::class, 'throws names "stdClass", which is not a Throwable'];
         yield 'throws: a class a failed assertion is an instance of' => [ThrowsExceptionStub::class, 'throws names "Exception", which a failed assertion is an instance of — a falsified body would pass; name the exception the body throws'];
@@ -818,7 +821,7 @@ final class PropertyInterceptorTest
 
         $counterExample = $result->failure->getCounterExample();
         Assert::same($counterExample->runsBeforeFailure, 0);
-        Assert::same(CoreCompat::discardsBeforeFailure($counterExample), 1);
+        Assert::same($counterExample->discards, 1);
     }
 
     public function warnsAndGivesUpWhenEveryRunIsDiscarded(): void
@@ -1808,6 +1811,115 @@ final class PropertyInterceptorTest
         $result = $interceptor->runTest($this->info(PassingStub::class, 'check'), $passing);
 
         Assert::same($result->status, Status::Passed);
+    }
+
+    public function envPropertyExhaustiveTurnsEnumerationOnForTheSuite(): void
+    {
+        $restoreEnv = Env::set('PROPERTY_EXHAUSTIVE', '1');
+
+        try {
+            $seen = 0;
+            $next = static function (TestInfo $info) use (&$seen): TestResult {
+                ++$seen;
+
+                return new TestResult(info: $info, status: Status::Passed);
+            };
+
+            // PassingStub asks for 5 runs over intBetween(1, 10): the whole domain is 10.
+            $result = (new PropertyInterceptor($this->createMessenger()))->runTest($this->info(PassingStub::class, 'check'), $next);
+
+            Assert::same($result->status, Status::Passed);
+            Assert::same($seen, 10);
+        } finally {
+            $restoreEnv();
+        }
+    }
+
+    public function envPropertySearchRunsOverridesTheAttribute(): void
+    {
+        $restoreEnv = Env::set('PROPERTY_SEARCH_RUNS', '7');
+
+        try {
+            $seen = 0;
+            $next = static function (TestInfo $info) use (&$seen): TestResult {
+                ++$seen;
+                Target::maximize('x', $info->arguments[0]);
+
+                return new TestResult(info: $info, status: Status::Passed);
+            };
+
+            // PassingStub: 5 random runs, then the 7 search runs the environment asks for.
+            $result = (new PropertyInterceptor($this->createMessenger()))->runTest($this->info(PassingStub::class, 'check'), $next);
+
+            Assert::same($result->status, Status::Passed);
+            Assert::same($seen, 12);
+        } finally {
+            $restoreEnv();
+        }
+    }
+
+    public function envPropertySearchRunsZeroSwitchesTheSearchOff(): void
+    {
+        $restoreEnv = Env::set('PROPERTY_SEARCH_RUNS', '0');
+
+        try {
+            $seen = 0;
+            $next = static function (TestInfo $info) use (&$seen): TestResult {
+                ++$seen;
+                Target::maximize('sum', $info->arguments[0] + $info->arguments[1]);
+
+                return new TestResult(info: $info, status: Status::Passed);
+            };
+
+            // SearchStub asks for 30 search runs; the environment says none.
+            (new PropertyInterceptor($this->createMessenger()))->runTest($this->info(SearchStub::class, 'check'), $next);
+
+            Assert::same($seen, 20);
+        } finally {
+            $restoreEnv();
+        }
+    }
+
+    public function aMalformedPropertySearchRunsIsThisTestsError(): void
+    {
+        $restoreEnv = Env::set('PROPERTY_SEARCH_RUNS', 'many');
+
+        try {
+            $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
+            $result = (new PropertyInterceptor($this->createMessenger()))->runTest($this->info(PassingStub::class, 'check'), $next);
+
+            Assert::same($result->status, Status::Error);
+            Assert::same($result->failure?->getMessage(), 'PROPERTY_SEARCH_RUNS must be a non-negative integer, got "many"');
+        } finally {
+            $restoreEnv();
+        }
+    }
+
+    public function verboseLogsEveryTargetImprovement(): void
+    {
+        $restoreEnv = Env::set('PROPERTY_VERBOSE', '1');
+
+        try {
+            $messenger = $this->createMessenger();
+            $next = static function (TestInfo $info): TestResult {
+                Target::maximize('sum', $info->arguments[0] + $info->arguments[1]);
+
+                return new TestResult(info: $info, status: Status::Passed);
+            };
+
+            (new PropertyInterceptor($messenger))->runTest($this->info(SearchStub::class, 'check'), $next);
+            $lines = array_filter(
+                array_map(static fn($m): string => $m->content, $messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT)),
+                static fn(string $line): bool => str_contains($line, ' target '),
+            );
+
+            Assert::true($lines !== []);
+            foreach ($lines as $line) {
+                Assert::true(preg_match('/^Property "check" target sum max: (-|\d+) -> \d+ \(a=\d+, b=\d+\)$/', $line) === 1, $line);
+            }
+        } finally {
+            $restoreEnv();
+        }
     }
 
     public function verboseLogsEveryRunsArguments(): void

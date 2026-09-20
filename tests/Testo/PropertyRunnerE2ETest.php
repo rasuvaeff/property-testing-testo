@@ -8,6 +8,7 @@ use Rasuvaeff\PropertyTesting\CoverageViolationException;
 use Rasuvaeff\PropertyTesting\DeadlineExceededException;
 use Rasuvaeff\PropertyTesting\ExampleViolationException;
 use Rasuvaeff\PropertyTesting\GaveUpException;
+use Rasuvaeff\PropertyTesting\GenerationExhaustedException;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Rasuvaeff\PropertyTesting\RegressionViolationException;
 use Rasuvaeff\PropertyTesting\Runner\FilesystemCorpus;
@@ -22,7 +23,6 @@ use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\ExpectExceptionFixture;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\FalsifyingPropertyFixture;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\GaveUpFixture;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\ThrowsFixture;
-use Rasuvaeff\PropertyTesting\Testo\Tests\Support\CoreCompat;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Support\Env;
 use Testo\Assert;
 use Testo\Codecov\CoversNothing;
@@ -188,7 +188,7 @@ final class PropertyRunnerE2ETest
         $result = TestRunner::runTest([ExhaustedFixture::class, 'neverGetsAValue']);
 
         Assert::true($result->status->isFailure());
-        Assert::instanceOf($result->failure, CoreCompat::generationExhausted());
+        Assert::instanceOf($result->failure, GenerationExhaustedException::class);
     }
 
     public function overlongRunMissesItsDeadlineThroughTheRealRunner(): void

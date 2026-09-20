@@ -971,3 +971,87 @@ final class PathWithoutSeedStub
         return ['x' => Gen::intBetween(1, 10)];
     }
 }
+
+final class ZeroExhaustiveBudgetStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide', exhaustiveBudget: 0)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class NegativeFlakyReplaysStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide', flakyReplays: -1)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class NegativeSearchRunsStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide', searchRuns: -1)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
+final class ExhaustiveStub
+{
+    #[Property(runs: 3, seed: 1, generators: 'provide', exhaustive: true)]
+    public function check(bool $flag, int $n): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['flag' => Gen::bool(), 'n' => Gen::intBetween(0, 4)];
+    }
+}
+
+final class ExhaustiveDeclinedStub
+{
+    #[Property(runs: 3, seed: 1, generators: 'provide', exhaustive: true, exhaustiveBudget: 5)]
+    public function check(bool $flag, int $n): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['flag' => Gen::bool(), 'n' => Gen::intBetween(0, 4)];
+    }
+}
+
+final class SearchStub
+{
+    #[Property(runs: 20, seed: 1, generators: 'provide', searchRuns: 30)]
+    public function check(int $a, int $b): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['a' => Gen::intBetween(0, 1000), 'b' => Gen::intBetween(0, 1000)];
+    }
+}
+
+final class FlakyStub
+{
+    #[Property(runs: 5, seed: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(51, 100)];
+    }
+}

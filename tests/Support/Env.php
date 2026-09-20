@@ -80,6 +80,8 @@ final class Env
             'PROPERTY_DERANDOMIZE' => null,
             'PROPERTY_PATH' => null,
             'PROPERTY_EDGE_CASES' => null,
+            'PROPERTY_EXHAUSTIVE' => null,
+            'PROPERTY_SEARCH_RUNS' => null,
         ]);
     }
 }
