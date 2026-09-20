@@ -55,7 +55,7 @@ composer require --dev rasuvaeff/property-testing-testo
 ## Требования
 
 - PHP 8.3+
-- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^0.9 || ^0.10 || ^0.11`
+- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^0.12`
 - [`testo/testo`](https://packagist.org/packages/testo/testo) `^0.10.39 || ^1.0`
 
 ## Установка
@@ -321,6 +321,10 @@ public static function provide(): array
 | `edgeCases` | `EdgeCases::None` выключает граничное смещение числовых генераторов — для property, которой края стоят только прогонов |
 | `auto` | Достраивает генераторы из сигнатуры property для параметров, не покрытых провайдером; провайдер становится частичными overrides. По умолчанию выключен и дефолтом не станет |
 | `throws` | Класс исключения, который обязан бросить каждый прогон: бросивший его проходит, вернувшийся нормально или бросивший другой класс падает и shrink-ается. Замена `#[ExpectException]` на уровне прогона; сам `#[ExpectException]` на property отклоняется |
+| `exhaustive` | Обойти весь домен параметров вместо выборки, когда каждый генератор — `Enumerable`, а произведение умещается в `exhaustiveBudget`; иначе фаза делает выборку, а предупреждение говорит почему. `runs` при обходе игнорируется — см. [README core](https://github.com/rasuvaeff/property-testing-core#exhaustive-mode) |
+| `exhaustiveBudget` | Наибольший домен, который обходит `exhaustive` (по умолчанию 10 000) |
+| `flakyReplays` | Повторные исполнения минимизированного контрпримера (по умолчанию 2); прошедший помечает контрпример flaky, со строкой `Flaky:` в сообщении. `0` выключает — см. [детекцию flaky](https://github.com/rasuvaeff/property-testing-core#flaky-detection) |
+| `searchRuns` | Сколько тел может исполнить целевой поиск после random-фазы, если тело вызывает `Target::maximize()`/`minimize()` (по умолчанию 0 — без поиска) — см. [целевой поиск](https://github.com/rasuvaeff/property-testing-core#targeted-search-target) |
 
 ### Переменные окружения
 
@@ -340,6 +344,8 @@ public static function provide(): array
 | `PROPERTY_DERANDOMIZE` | Выводит каждый незаданный seed из id property: весь сьют становится воспроизводимым без правки кода. `''` оставляет атрибут в силе; `0`, `false`, `off` и `no` (регистр не важен, пробелы обрезаются) принудительно выключают, перекрывая `derandomize: true`; любое другое значение принудительно включает. Под core 0.9 ложным словом был только `0` |
 | `PROPERTY_PATH` | Записанный спуск shrink воспроизводится вместо поиска. **Требует закреплённого seed** — `PROPERTY_SEED` или атрибутного — и без него отвергается: у property без seed адаптер рисует случайный, и путь воспроизводил бы спуск прогона, которого не было. `path` в атрибуте побеждает. Он описывает одно падение, поэтому запускайте с фильтром на этот один тест — любое другое property сообщит, что путь устарел |
 | `PROPERTY_EDGE_CASES` | `mixin` или `none` (регистр не важен) — граничное смещение для всего сьюта, перекрывает атрибут. Неизвестное значение — исключение |
+| `PROPERTY_EXHAUSTIVE` | Включает исчерпывающий режим для каждой property, чей домен умещается в её бюджет (ночной прогон, доказывающий малые домены). Выключают те же слова, что и `PROPERTY_DERANDOMIZE` |
+| `PROPERTY_SEARCH_RUNS` | Неотрицательное целое, перекрывающее `searchRuns` каждой property — больший бюджет поиска на ночном прогоне или `0`, чтобы выключить его. Испорченное значение — исключение |
 
 ### Корпус регрессий
 
@@ -410,6 +416,18 @@ public static function stackBehavesLikeItsModelGenerators(): array
 
 Полный исполняемый пример со стеком —
 [`examples/state_machine.php`](examples/state_machine.php).
+
+Rule-фасад работает так же — `#[Rule]`, `#[Precondition]` и `#[Invariant]` на
+одном классе машины, `Gen::rules(QueueMachine::class)` как генератор и
+`$sequence->run(static fn () => new QueueMachine(new Queue()))` в теле; полный
+пример — в [README движка](https://github.com/rasuvaeff/property-testing-core#rule-машины-genrules).
+
+Интерцептор печатает рядом со строкой распределения то, что измерил движок:
+каждую таблицу `Classify::tabulate()` с долями тегов и парами, встретившимися
+вместе, обошёл ли исчерпывающий режим домен или почему сделал выборку, и отчёт
+поиска (`evaluations`, по метке — лучшая оценка и число улучшений).
+`PROPERTY_VERBOSE` дополнительно логирует каждое событие `TargetImproved` с
+давшим его входом.
 
 ### Генераторы
 

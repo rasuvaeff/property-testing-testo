@@ -14,12 +14,13 @@ use Rasuvaeff\PropertyTesting\DeadlineExceededException;
 use Rasuvaeff\PropertyTesting\ExampleViolationException;
 use Rasuvaeff\PropertyTesting\GaveUpException;
 use Rasuvaeff\PropertyTesting\Gen;
+use Rasuvaeff\PropertyTesting\GenerationExhaustedException;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Rasuvaeff\PropertyTesting\RegressionViolationException;
 use Rasuvaeff\PropertyTesting\Runner\FilesystemCorpus;
 use Rasuvaeff\PropertyTesting\Runner\PropertyRunner;
+use Rasuvaeff\PropertyTesting\Target;
 use Rasuvaeff\PropertyTesting\Testo\PropertyInterceptor;
-use Rasuvaeff\PropertyTesting\Testo\Tests\Support\CoreCompat;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Support\Env;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Support\FakeClock;
 use Rasuvaeff\PropertyTesting\Testo\VerboseListener;
@@ -191,6 +192,87 @@ final class GoldenMessagesTest
         Assert::same($lines[0]->level, Level::Info);
     }
 
+    public function tabulatedDistributionReport(): void
+    {
+        $messenger = $this->createMessenger();
+        $next = static function (TestInfo $info): TestResult {
+            Classify::tabulate('size', 'small');
+            Classify::tabulate('features', ['compressed', 'retried']);
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        (new PropertyInterceptor($messenger))->runTest($this->info(PassingStub::class, 'check'), $next);
+
+        $lines = array_map(static fn($m): string => $m->content, $messenger->getMessages()->channel(Messenger::CHANNEL_STDERR));
+        Assert::same($lines, [
+            'Property "check" table size: small 100% (5/5)',
+            'Property "check" table features: compressed 100% (5/5), retried 100% (5/5); together: compressed & retried 100% (5/5)',
+        ]);
+    }
+
+    public function exhaustiveWalkAndDeclineReports(): void
+    {
+        $messenger = $this->createMessenger();
+        (new PropertyInterceptor($messenger))->runTest($this->info(ExhaustiveStub::class, 'check'), $this->pass());
+        $lines = $messenger->getMessages()->channel(Messenger::CHANNEL_STDERR);
+        Assert::same(count($lines), 1);
+        Assert::same($lines[0]->content, 'Property "check" enumerated its whole domain of 10 input(s)');
+        Assert::same($lines[0]->level, Level::Info);
+
+        $messenger = $this->createMessenger();
+        (new PropertyInterceptor($messenger))->runTest($this->info(ExhaustiveDeclinedStub::class, 'check'), $this->pass());
+        $lines = $messenger->getMessages()->channel(Messenger::CHANNEL_STDERR);
+        Assert::same(count($lines), 1);
+        Assert::same($lines[0]->content, 'Property "check" could not enumerate its domain and sampled instead: the domain has 10 inputs, above the exhaustive budget of 5');
+        Assert::same($lines[0]->level, Level::Warning);
+    }
+
+    public function searchReport(): void
+    {
+        $messenger = $this->createMessenger();
+        $next = static function (TestInfo $info): TestResult {
+            Target::maximize('sum', $info->arguments[0] + $info->arguments[1]);
+            Target::minimize('a', $info->arguments[0]);
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = (new PropertyInterceptor($messenger))->runTest($this->info(SearchStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+        $lines = $messenger->getMessages()->channel(Messenger::CHANNEL_STDERR);
+        Assert::same(count($lines), 1);
+        Assert::true(preg_match(
+            '/^Property "check" search: 30 evaluation\(s\); sum max \d+ \(\d+ improvement\(s\)\), a min \d+ \(\d+ improvement\(s\)\)$/',
+            $lines[0]->content,
+        ) === 1, $lines[0]->content);
+    }
+
+    public function flakyCounterexampleMessage(): void
+    {
+        // Fails once, then never again: the descent finds nothing smaller
+        // that fails, and the first replay of the minimised input passes.
+        $failed = false;
+        $next = static function (TestInfo $info) use (&$failed): TestResult {
+            if (!$failed) {
+                $failed = true;
+
+                return new TestResult(info: $info, status: Status::Failed, failure: new \RuntimeException('once'));
+            }
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $this->interceptor()->runTest($this->info(FlakyStub::class, 'check'), $next);
+
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+        Assert::true($result->failure->getCounterExample()->isFlaky());
+        Assert::string($result->failure->getMessage())->contains(
+            "\n  Failure:  once\n  Flaky:    the minimised input passed on replay 1; suspect nondeterminism in the body or the code under test, not this input",
+        );
+    }
+
     /**
      * With a 6 ms step against a 5 ms deadline the elapsed time is exact, so
      * the whole message is deterministic — this is what the clock seam is for.
@@ -227,7 +309,7 @@ final class GoldenMessagesTest
     {
         $result = $this->interceptor()->runTest($this->info(ExhaustedStub::class, 'check'), $this->pass());
 
-        Assert::instanceOf($result->failure, CoreCompat::generationExhausted());
+        Assert::instanceOf($result->failure, GenerationExhaustedException::class);
         Assert::same(
             $result->failure->getMessage(),
             'Gen::filter() exhausted after 100 attempt(s): the predicate rejected every generated value; widen the source arbitrary, raise the attempt budget, or build dependent values with Gen::flatMap() instead of filtering',

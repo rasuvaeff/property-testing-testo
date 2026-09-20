@@ -25,6 +25,20 @@ final class PropertyTest
         Assert::null($property->maxDiscards);
         Assert::null($property->timeoutMs);
         Assert::null($property->budgetMs);
+        Assert::false($property->exhaustive);
+        Assert::same($property->exhaustiveBudget, 10_000);
+        Assert::same($property->flakyReplays, 2);
+        Assert::same($property->searchRuns, 0);
+    }
+
+    public function retainsTheSearchAndExhaustiveKnobs(): void
+    {
+        $property = new Property(exhaustive: true, exhaustiveBudget: 500, flakyReplays: 0, searchRuns: 40);
+
+        Assert::true($property->exhaustive);
+        Assert::same($property->exhaustiveBudget, 500);
+        Assert::same($property->flakyReplays, 0);
+        Assert::same($property->searchRuns, 40);
     }
 
     public function retainsConstructorArguments(): void
@@ -112,6 +126,9 @@ final class PropertyTest
         yield 'timeoutMs: 0' => ['timeoutMs', 0];
         yield 'budgetMs: 0' => ['budgetMs', 0];
         yield 'shrinkBudgetMs: 0' => ['shrinkBudgetMs', 0];
+        yield 'exhaustiveBudget: 0' => ['exhaustiveBudget', 0];
+        yield 'flakyReplays: -1' => ['flakyReplays', -1];
+        yield 'searchRuns: -1' => ['searchRuns', -1];
     }
 
     public function acceptsZeroMaxShrinks(): void
