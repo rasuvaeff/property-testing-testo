@@ -24,7 +24,7 @@
     },
     "require": {
         "php": "8.3 - 8.5",
-        "rasuvaeff/property-testing-core": "^1.0",
+        "rasuvaeff/property-testing-core": "^1.2",
         "testo/assert": "^0.1.15",
         "testo/testo": "^0.10.39"
     },

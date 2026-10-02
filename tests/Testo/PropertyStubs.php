@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Rasuvaeff\PropertyTesting\Testo\Tests;
 
+use Rasuvaeff\PropertyTesting\Arbitrary\IntArbitrary;
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Gen;
+use Rasuvaeff\PropertyTesting\Generate;
 use Rasuvaeff\PropertyTesting\Property;
 use Rasuvaeff\PropertyTesting\Runner\EdgeCases;
 use Rasuvaeff\PropertyTesting\Runner\Phase;
@@ -1053,5 +1055,53 @@ final class FlakyStub
     public static function provide(): array
     {
         return ['x' => Gen::intBetween(51, 100)];
+    }
+}
+
+/**
+ * Generators written on the parameters, with and without auto and a provider.
+ */
+final class GenerateStub
+{
+    #[Property(runs: 10, seed: 1)]
+    public function onlyAttributes(
+        #[Generate(new IntArbitrary(3, 3))]
+        int $x,
+        #[Generate('fives')]
+        int $y,
+    ): void {}
+
+    #[Property(runs: 10, seed: 1, generators: 'provide')]
+    public function attributeBesideAProvider(
+        int $x,
+        #[Generate(new IntArbitrary(3, 3))]
+        int $y,
+    ): void {}
+
+    #[Property(runs: 10, seed: 1)]
+    public function attributeLeavingAParameterUncovered(
+        #[Generate(new IntArbitrary(3, 3))]
+        int $x,
+        int $y,
+    ): void {}
+
+    /** @param int<100, 200> $y */
+    #[Property(runs: 10, seed: 1, auto: true)]
+    public function attributeUnderAuto(
+        #[Generate(new IntArbitrary(3, 3))]
+        int $x,
+        int $y,
+    ): void {}
+
+    /** @return ArbitraryInterface<int> */
+    public static function fives(): ArbitraryInterface
+    {
+        return Gen::constant(value: 5);
+    }
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::constant(value: 7)];
     }
 }

@@ -6,6 +6,7 @@ namespace Rasuvaeff\PropertyTesting\Testo;
 
 use Rasuvaeff\PropertyTesting\ArbitraryInterface;
 use Rasuvaeff\PropertyTesting\Gen;
+use Rasuvaeff\PropertyTesting\Generate;
 use Rasuvaeff\PropertyTesting\Property;
 use Rasuvaeff\PropertyTesting\PropertyListener;
 use Rasuvaeff\PropertyTesting\Runner\Clock;
@@ -341,6 +342,12 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 return Gen::forParameters($testMethod);
             }
 
+            if ($this->carriesGenerate($testMethod)) {
+                // No provider and no auto, but generators written on the
+                // parameters: they have to cover every one of them.
+                return Gen::forParameters($testMethod, derive: false);
+            }
+
             throw new \InvalidArgumentException(sprintf(
                 'Property "%s" requires a generators method "%s" on %s returning array<string, ArbitraryInterface>',
                 $testMethod->getName(),
@@ -397,13 +404,22 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             }
         }
 
-        if (!$property->auto) {
-            return $typed;
+        // The provider covers the parameters it names and #[Generate] the ones
+        // that carry it; under auto the signature covers the rest — the
+        // forClass(overrides) model applied to the property — and without it
+        // a parameter left uncovered is refused by name.
+        return Gen::forParameters($testMethod, $typed, derive: $property->auto);
+    }
+
+    private function carriesGenerate(\ReflectionMethod $testMethod): bool
+    {
+        foreach ($testMethod->getParameters() as $parameter) {
+            if ($parameter->getAttributes(Generate::class) !== []) {
+                return true;
+            }
         }
 
-        // The provider covers the parameters it names; the signature covers
-        // the rest — the forClass(overrides) model applied to the property.
-        return Gen::forParameters($testMethod, $typed);
+        return false;
     }
 
     /**

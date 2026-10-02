@@ -2719,6 +2719,47 @@ final class PropertyInterceptorTest
             ->contains('requires a generators method "checkWithoutAutoGenerators"');
     }
 
+    #[DataProvider('generateAttributeCases')]
+    public function aGenerateAttributeCoversItsParameter(string $method, \Closure $check): void
+    {
+        $interceptor = new PropertyInterceptor($this->createMessenger());
+        $next = static function (TestInfo $info) use ($check): TestResult {
+            Assert::true($check(...$info->arguments));
+
+            return new TestResult(info: $info, status: Status::Passed);
+        };
+
+        $result = $interceptor->runTest($this->info(GenerateStub::class, $method), $next);
+
+        Assert::same($result->status, Status::Passed);
+    }
+
+    /**
+     * @return iterable<string, array{string, \Closure(mixed...): bool}>
+     */
+    public static function generateAttributeCases(): iterable
+    {
+        yield 'attributes alone, without auto or a provider' => [
+            'onlyAttributes',
+            static fn(mixed $x, mixed $y): bool => $x === 3 && $y === 5,
+        ];
+        yield 'an attribute beside a provider, without auto' => [
+            'attributeBesideAProvider',
+            static fn(mixed $x, mixed $y): bool => $x === 7 && $y === 3,
+        ];
+        yield 'an attribute under auto, the rest derived' => [
+            'attributeUnderAuto',
+            static fn(mixed $x, mixed $y): bool => $x === 3 && is_int($y) && $y >= 100 && $y <= 200,
+        ];
+    }
+
+    public function withoutAutoAParameterNeitherAttributeNorProviderCoversIsRefused(): void
+    {
+        Assert::string($this->misconfiguration(GenerateStub::class, 'attributeLeavingAParameterUncovered')->getMessage())
+            ->contains('GenerateStub::attributeLeavingAParameterUncovered()')
+            ->contains('parameter $y has no generator; pass an override or #[Generate]');
+    }
+
     private function info(string $class, string $method): TestInfo
     {
         $reflection = new \ReflectionMethod($class, $method);

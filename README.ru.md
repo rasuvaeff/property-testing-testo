@@ -301,6 +301,37 @@ public static function provide(): array
   (runs, phases), а `auto` меняет смысл аргументов конкретной property —
   территория атрибута.
 
+### Генераторы на параметре (`#[Generate]`)
+
+Параметр может нести генератор сам — атрибут `#[Generate]` из ядра
+(`rasuvaeff/property-testing-core` 1.2):
+
+```php
+use Rasuvaeff\PropertyTesting\Arbitrary\IntArbitrary;
+use Rasuvaeff\PropertyTesting\Generate;
+
+#[Property]
+public function delayStaysWithinCap(
+    #[Generate(new IntArbitrary(0, 10_000))]
+    int $base,
+    #[Generate([Generators::class, 'attempts'])]
+    int $attempt,
+): void {}
+```
+
+- Работает **без `auto`**: если провайдера нет, достаточно одних атрибутов —
+  при условии, что они покрывают каждый параметр. Провайдер и атрибуты могут
+  и поделить параметры между собой. Параметр, не покрытый ни тем, ни другим, —
+  отказ с его именем; из типов ничего не выводится, пока не сказано
+  `auto: true`.
+- Под `auto: true` атрибут читается после провайдера и до `@param`-типа и
+  нативного типа.
+- Аргумент — arbitrary, построенный через `new`, или ссылка на статическую
+  фабрику, которая его возвращает (`'method'`, `'Class::method'`,
+  `[Class::class, 'method']`, invokable), — так используются `Gen::map()`,
+  `Gen::email()`, `Gen::regex()` и другие генераторы на замыканиях. Что
+  выражается через `new` — в README ядра.
+
 ### Параметры атрибута
 
 | Параметр | Значение |
