@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 — 2026-10-02
 
 - **Added:** generators written on the property's parameters with core's
   `#[Generate]` (#68). Without `auto`, the attributes alone are enough
