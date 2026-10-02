@@ -48,6 +48,12 @@ installation fails at resolution time.
   method and parameter). The provider becomes PARTIAL overrides. Strictly
   opt-in, never the default (bare int/float derive their full native domain).
   No PROPERTY_AUTO env variable, deliberately.
+- `#[Generate(...)]` on a parameter (core 1.2) holds its generator: an
+  arbitrary built with `new`, or a static factory reference ('method',
+  'Class::method', [Class::class, 'method'], invokable). Works WITHOUT auto:
+  no provider needed when attributes (plus provider, if any) cover every
+  parameter; an uncovered one throws by name. Under auto: provider >
+  #[Generate] > @param > native type.
 - A provider key that is not a parameter of the property is an error, with or
   without `auto` (a provider shared by properties of different arity is
   refused).

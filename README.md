@@ -306,6 +306,37 @@ Rules worth knowing:
   environment dials the suite (runs, phases), while `auto` changes what one
   property's arguments mean — attribute territory.
 
+### Generators on the parameter (`#[Generate]`)
+
+A parameter can carry its generator itself — core's `#[Generate]`
+(`rasuvaeff/property-testing-core` 1.2):
+
+```php
+use Rasuvaeff\PropertyTesting\Arbitrary\IntArbitrary;
+use Rasuvaeff\PropertyTesting\Generate;
+
+#[Property]
+public function delayStaysWithinCap(
+    #[Generate(new IntArbitrary(0, 10_000))]
+    int $base,
+    #[Generate([Generators::class, 'attempts'])]
+    int $attempt,
+): void {}
+```
+
+- It works **without `auto`**: when no provider exists, the attributes alone
+  are enough — as long as they cover every parameter. A provider and
+  attributes may also split the parameters between them. A parameter that
+  neither covers is refused by name; nothing is derived from the types
+  unless `auto: true` says so.
+- Under `auto: true` it is read after the provider and before the `@param`
+  type and the native type.
+- The argument is an arbitrary built with `new`, or a reference to a static
+  factory returning one (`'method'`, `'Class::method'`,
+  `[Class::class, 'method']`, an invokable) — the way to use `Gen::map()`,
+  `Gen::email()`, `Gen::regex()` and other generators built with a closure.
+  What `new` can express is listed in core's README.
+
 ### Attribute parameters
 
 | Parameter | Meaning |

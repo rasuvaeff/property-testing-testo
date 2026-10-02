@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.0 — 2026-10-02
+
+- **Added:** generators written on the property's parameters with core's
+  `#[Generate]` (#68). Without `auto`, the attributes alone are enough
+  when they cover every parameter — no generators method needed — and they may
+  share the parameters with a provider; under `auto: true` they sit between
+  the provider and the `@param` type. Requires `rasuvaeff/property-testing-core`
+  `^1.2`.
+- **Changed:** without `auto`, a parameter neither the provider nor
+  `#[Generate]` covers is refused naming the method and the parameter, instead
+  of the engine's `No generator for parameter "x"`.
+
 ## 1.0.0 — 2026-09-20
 
 The stability release, in step with `rasuvaeff/property-testing-core` 1.0.0.
