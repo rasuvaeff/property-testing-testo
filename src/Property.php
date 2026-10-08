@@ -116,6 +116,11 @@ final readonly class Property implements Interceptable
      *        body that calls `Target::maximize()`/`minimize()`: the best-scoring inputs are mutated
      *        one parameter at a time. 0 (the default) performs no search. `PROPERTY_SEARCH_RUNS`
      *        overrides it for the suite.
+     * @param int $failOn PHP diagnostic levels that should falsify a run. A matching warning,
+     *        notice or deprecation is converted to an {@see \ErrorException}, so it carries the
+     *        generated input and shrinks like any other failure. 0 (the default) preserves PHP's
+     *        normal diagnostic handling. This opt-in overrides Testo's suite-level diagnostic
+     *        mask, while `@`-suppressed diagnostics remain suppressed.
      */
     public function __construct(
         public int $runs = 100,
@@ -141,6 +146,7 @@ final readonly class Property implements Interceptable
         public int $exhaustiveBudget = 10_000,
         public int $flakyReplays = 2,
         public int $searchRuns = 0,
+        public int $failOn = 0,
     ) {
         // A data holder: every value is validated by the interceptor, which
         // can name the property. Testo instantiates the attribute long before

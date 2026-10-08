@@ -144,6 +144,11 @@ What the adapter does and does not combine with:
   Testo's lifecycle interceptor, so `#[BeforeTest]`/`#[AfterTest]` execute
   once per generated input, not once per test (PHPUnit's `setUp` runs once).
   A hook that throws is that run's failure and is shrunk like any other.
+- **PHP diagnostics can opt into falsifying a run** with `failOn:`:
+  `#[Property(failOn: E_DEPRECATED | E_WARNING)]` converts matching diagnostics
+  to `ErrorException`s. The default `0` leaves normal handling unchanged;
+  `failOn` explicitly observes levels Testo masks suite-wide, and `@`-suppressed
+  diagnostics remain suppressed.
 - **A data provider cannot be combined with `#[Property]`** — the generators
   supply the arguments — and `#[Property]` on a function-based case is
   refused: both are reported as an error of the test with a message, as is
@@ -357,6 +362,7 @@ public function delayStaysWithinCap(
 | `edgeCases` | `EdgeCases::None` turns off the numeric boundary bias — for a property the edges only cost runs |
 | `auto` | Derives generators from the property's signature for every parameter the provider does not cover; the provider becomes partial overrides. Off by default, and stays off |
 | `throws` | The exception class every run must throw — a run that throws it passes, one that returns normally or throws another class fails and shrinks. The per-run replacement for `#[ExpectException]`, which is refused on a property |
+| `failOn` | PHP diagnostic bitmask that turns matching warnings, notices or deprecations into shrinkable run failures; `0` disables it and `@`-suppressed diagnostics stay suppressed |
 | `exhaustive` | Walk the whole parameter domain instead of sampling it when every generator is `Enumerable` and the product fits `exhaustiveBudget`; otherwise the phase samples and a warning says why. `runs` is ignored when it walks — see the [core README](https://github.com/rasuvaeff/property-testing-core#exhaustive-mode) |
 | `exhaustiveBudget` | The largest domain `exhaustive` walks (default 10 000) |
 | `flakyReplays` | Re-executions of the minimised counterexample (default 2); one that passes marks the counterexample flaky, with a `Flaky:` line in the failure. `0` disables — see [flaky detection](https://github.com/rasuvaeff/property-testing-core#flaky-detection) |
