@@ -16,6 +16,7 @@ use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\AssumeDiscardFixture;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\CorpusRegressionFixture;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\CoverageFixture;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\DeadlineFixture;
+use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\DiagnosticFixture;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\DrawPropertyFixture;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\ExampleFailingFixture;
 use Rasuvaeff\PropertyTesting\Testo\Tests\Fixture\ExhaustedFixture;
@@ -134,6 +135,17 @@ final class PropertyRunnerE2ETest
 
         Assert::false($result->status->isSuccessful());
         Assert::true($result->status === Status::Error || $result->status === Status::Failed);
+    }
+
+    public function aSelectedDiagnosticFalsifiesAndShrinksItsInput(): void
+    {
+        $result = TestRunner::runTest([DiagnosticFixture::class, 'everyInputRaisesADiagnostic']);
+
+        Assert::true($result->status->isFailure());
+        Assert::instanceOf($result->failure, PropertyViolationException::class);
+        Assert::same($result->failure->getCounterExample()->shrunkArguments['value'], 1);
+        Assert::instanceOf($result->failure->getCounterExample()->failure, \ErrorException::class);
+        Assert::string($result->failure->getCounterExample()->failure?->getMessage())->contains('diagnostic for');
     }
 
     public function anExpectExceptionAttributeCanBeSatisfiedByEveryRun(): void

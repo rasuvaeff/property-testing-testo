@@ -59,17 +59,48 @@ final class TestoTrialExecutor implements TrialExecutor
     /**
      * @param \Closure(TestInfo): TestResult $next
      * @param ?class-string<\Throwable> $expectedExceptionClass
+     * @param int $failOn PHP diagnostic levels that turn a run into an ErrorException.
      */
     public function __construct(
         private readonly TestInfo $info,
         private readonly \Closure $next,
         private readonly ?string $expectedExceptionClass = null,
+        private readonly int $failOn = 0,
     ) {}
 
     #[\Override]
     public function execute(array $arguments): TrialOutcome
     {
         ++$this->runs;
+
+        $reportingAtStart = error_reporting();
+        if ($this->failOn !== 0) {
+            /** @var array{handler: mixed} $handlerState */
+            $handlerState = ['handler' => null];
+            $handler = function (
+                int $severity,
+                string $message,
+                string $file,
+                int $line,
+            ) use (&$handlerState, $reportingAtStart): bool {
+                // An explicit failOn is allowed to see levels Testo masks for
+                // the suite (notably E_DEPRECATED and E_NOTICE). The error
+                // control operator changes error_reporting() for the handler,
+                // so a level that was suppressed with @ remains suppressed.
+                $suppressed = ($reportingAtStart !== error_reporting()) && (($severity & error_reporting()) === 0);
+
+                if (!$suppressed && ($severity & $this->failOn) !== 0) {
+                    throw new \ErrorException($message, 0, $severity, $file, $line);
+                }
+
+                if (is_callable($handlerState['handler'])) {
+                    return (bool) ($handlerState['handler'])($severity, $message, $file, $line);
+                }
+
+                return false;
+            };
+            $handlerState['handler'] = set_error_handler($handler);
+        }
 
         try {
             $result = ($this->next)($this->info->with(arguments: array_values($arguments)));
@@ -91,6 +122,10 @@ final class TestoTrialExecutor implements TrialExecutor
             // must reach the engine as one — escaping here would abort the
             // whole property with no counterexample.
             return $this->verdict($failure);
+        } finally {
+            if ($this->failOn !== 0) {
+                restore_error_handler();
+            }
         }
 
         foreach (array_keys($result->attributes) as $key) {

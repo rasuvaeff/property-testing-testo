@@ -181,4 +181,9 @@ final class PropertyTest
         // Not validated here either; the interceptor refuses a non-Throwable.
         Assert::same((new Property(throws: \stdClass::class))->throws, \stdClass::class);
     }
+    public function failOnDefaultsToDisabledAndKeepsTheDiagnosticMask(): void
+    {
+        Assert::same((new Property())->failOn, 0);
+        Assert::same((new Property(failOn: E_DEPRECATED | E_WARNING))->failOn, E_DEPRECATED | E_WARNING);
+    }
 }

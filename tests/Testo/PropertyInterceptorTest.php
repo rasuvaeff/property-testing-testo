@@ -282,6 +282,7 @@ final class PropertyInterceptorTest
         yield 'exhaustiveBudget: 0' => [ZeroExhaustiveBudgetStub::class, 'exhaustiveBudget must be greater than or equal to 1'];
         yield 'flakyReplays: -1' => [NegativeFlakyReplaysStub::class, 'flakyReplays must be greater than or equal to 0'];
         yield 'searchRuns: -1' => [NegativeSearchRunsStub::class, 'searchRuns must be greater than or equal to 0'];
+        yield 'failOn: -1' => [NegativeFailOnStub::class, 'failOn must be greater than or equal to 0'];
         yield 'path without seed' => [PathWithoutSeedStub::class, 'path replays a recorded descent and requires the seed it was recorded with'];
         yield 'throws: not a Throwable' => [ThrowsNonThrowableStub::class, 'throws names "stdClass", which is not a Throwable'];
         yield 'throws: a class a failed assertion is an instance of' => [ThrowsExceptionStub::class, 'throws names "Exception", which a failed assertion is an instance of — a falsified body would pass; name the exception the body throws'];
@@ -1046,6 +1047,41 @@ final class PropertyInterceptorTest
 
         Assert::true($outcome->isSkipped());
         Assert::true($outcome->isDiscarded());
+    }
+
+    public function failOnTurnsAMatchingDiagnosticIntoATrialFailure(): void
+    {
+        $executor = new TestoTrialExecutor(
+            $this->info(PassingStub::class, 'check'),
+            static function (TestInfo $info): TestResult {
+                trigger_error('diagnostic from input', E_USER_WARNING);
+
+                return new TestResult(info: $info, status: Status::Passed);
+            },
+            failOn: E_USER_WARNING,
+        );
+
+        $outcome = $executor->execute(['x' => 7]);
+
+        Assert::true($outcome->isFailed());
+        Assert::instanceOf($outcome->failure, \ErrorException::class);
+        Assert::same($outcome->failure?->getMessage(), 'diagnostic from input');
+        Assert::same($outcome->failure?->getSeverity(), E_USER_WARNING);
+    }
+
+    public function failOnLeavesSuppressedDiagnosticsSuppressed(): void
+    {
+        $executor = new TestoTrialExecutor(
+            $this->info(PassingStub::class, 'check'),
+            static function (TestInfo $info): TestResult {
+                @trigger_error('suppressed diagnostic', E_USER_WARNING);
+
+                return new TestResult(info: $info, status: Status::Passed);
+            },
+            failOn: E_USER_WARNING,
+        );
+
+        Assert::true($executor->execute(['x' => 7])->isPassed());
     }
 
     /**

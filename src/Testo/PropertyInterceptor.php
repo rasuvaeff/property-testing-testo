@@ -200,7 +200,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             $listeners[] = new VerboseListener($this->messenger);
         }
 
-        $executor = new TestoTrialExecutor($info, \Closure::fromCallable($next), $property->throws);
+        $executor = new TestoTrialExecutor($info, \Closure::fromCallable($next), $property->throws, $property->failOn);
         $result = $this->runner->run($definition, $executor, $listeners, $corpus);
 
         if ($executor->everyRunSkipped()) {
@@ -231,6 +231,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             $property->exhaustiveBudget < 1 => 'exhaustiveBudget must be greater than or equal to 1',
             $property->flakyReplays < 0 => 'flakyReplays must be greater than or equal to 0',
             $property->searchRuns < 0 => 'searchRuns must be greater than or equal to 0',
+            $property->failOn < 0 => 'failOn must be greater than or equal to 0',
             // The engine says the same thing, but the adapter draws a seed for
             // an unseeded property before the engine sees it, and an
             // environment seed replays a suite, not the run this path came from.

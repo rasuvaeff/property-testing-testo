@@ -996,6 +996,18 @@ final class NegativeSearchRunsStub
     }
 }
 
+final class NegativeFailOnStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide', failOn: -1)]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        return ['x' => Gen::intBetween(1, 10)];
+    }
+}
+
 final class ExhaustiveStub
 {
     #[Property(runs: 3, seed: 1, generators: 'provide', exhaustive: true)]
