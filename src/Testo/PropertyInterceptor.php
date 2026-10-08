@@ -27,7 +27,6 @@ use Rasuvaeff\PropertyTesting\Runner\SearchReport;
 use Rasuvaeff\PropertyTesting\Runner\TargetOutcome;
 use Rasuvaeff\PropertyTesting\Runner\TimeBudgetExceeded;
 use Rasuvaeff\PropertyTesting\ValueRenderer;
-use Testo\Assert\ExpectException;
 use Testo\Assert\State\Assertion\AssertionException;
 use Testo\Assert\State\Expectation\ExpectationFailed;
 use Testo\Common\Messenger;
@@ -50,13 +49,17 @@ use Testo\Pipeline\Middleware\TestRunInterceptor;
  * {@see \Testo\Pipeline\Attribute\FallbackInterceptor}, so simply requiring the
  * package is enough — no plugin registration in {@see testo.php} is needed.
  *
- * It sits close to the test function in the pipeline (after data providers,
- * repeat and retry policies) so it owns argument generation for property tests.
+ * It wraps Testo's assertion interceptors so they run once per generated input,
+ * while remaining inside data-provider, repeat and retry policies so it owns
+ * argument generation for property tests.
  *
  * @api
  */
 #[InterceptorOptions(
-    order: InterceptorOptions::ORDER_CLOSE_TO_TEST,
+    // Keep the property loop outside per-run assertion/expectation interceptors
+    // (including understudy-testo's verification), so each generated input
+    // receives its own assertion and double lifecycle.
+    order: InterceptorOptions::ORDER_ASSERTIONS - 200,
     testType: TestType::Test,
 )]
 final readonly class PropertyInterceptor implements TestRunInterceptor
@@ -115,17 +118,6 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 // arguments, and every set would share one corpus entry.
                 throw new \InvalidArgumentException(sprintf(
                     '#[Property] on "%s" cannot be combined with a data provider: the generators supply the arguments',
-                    $info->name,
-                ));
-            }
-
-            if ($reflection->getAttributes(ExpectException::class, \ReflectionAttribute::IS_INSTANCEOF) !== []) {
-                // Testo's expectation interceptor runs outside this one and
-                // sees only the aggregate failure — a PropertyViolationException,
-                // which is a RuntimeException — so the expectation would be
-                // met by any falsification, an assertion failure included.
-                throw new \InvalidArgumentException(sprintf(
-                    '#[Property] on "%s" cannot be combined with #[ExpectException]; use throws: instead',
                     $info->name,
                 ));
             }

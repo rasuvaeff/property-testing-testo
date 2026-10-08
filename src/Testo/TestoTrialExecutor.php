@@ -148,8 +148,15 @@ final class TestoTrialExecutor implements TrialExecutor
             return $this->verdict(null);
         }
 
-        // Failed, Error — and Aborted, Risky: anything that is not a success is
-        // not evidence the input passed.
+        if ($result->status === Status::Risky && $result->failure === null) {
+            // Testo's per-run assertion layer marks an assertion-free body
+            // risky. A completed body is still a successful property check;
+            // the aggregate property result owns its final status.
+            return $this->verdict(null);
+        }
+
+        // Failed, Error and Aborted: anything that is not a success is not
+        // evidence the input passed.
         return $this->verdict($result->failure ?? new \RuntimeException(sprintf(
             'The run ended with status %s and no failure attached',
             $result->status->name,

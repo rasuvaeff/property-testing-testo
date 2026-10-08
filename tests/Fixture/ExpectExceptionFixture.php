@@ -15,9 +15,8 @@ use Testo\Test;
  * Fixture executed through the real Testo runner by
  * {@see \Rasuvaeff\PropertyTesting\Testo\Tests\PropertyRunnerE2ETest}.
  *
- * Every run fails its assertion; with `#[ExpectException]` observing the
- * aggregate `PropertyViolationException` (a `RuntimeException`) the test used
- * to pass. Excluded from the Unit suite like every fixture here.
+ * Exercises Testo exception expectations inside and around the property loop.
+ * Excluded from the Unit suite like every fixture here.
  */
 final class ExpectExceptionFixture
 {
@@ -27,6 +26,14 @@ final class ExpectExceptionFixture
     public function expectsARuntimeExceptionButFailsAnAssertion(int $x): void
     {
         Assert::true(actual: false, message: 'never holds');
+    }
+
+    #[Test]
+    #[Property(runs: 3, seed: 1, generators: 'ints')]
+    #[ExpectException(\RuntimeException::class)]
+    public function throwsTheExpectedException(int $x): never
+    {
+        throw new \RuntimeException('expected');
     }
 
     /** @return array<string, ArbitraryInterface> */

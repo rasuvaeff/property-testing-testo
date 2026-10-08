@@ -128,11 +128,9 @@ final class PropertyRunnerE2ETest
 
     public function anExpectExceptionAttributeNeverTurnsAFalsifiedPropertyGreen(): void
     {
-        // Testo's expectation interceptor sits outside the property and sees
-        // only the aggregate PropertyViolationException — a RuntimeException —
-        // so the attribute used to be satisfied by the failed assertion. The
-        // combination is refused; whatever the outer interceptor makes of the
-        // refusal, the test is not a pass.
+        // The expectation interceptor runs per input. The assertion failure
+        // is a LogicException, not the expected RuntimeException, and the
+        // aggregate property failure cannot satisfy the expectation either.
         $result = TestRunner::runTest([ExpectExceptionFixture::class, 'expectsARuntimeExceptionButFailsAnAssertion']);
 
         Assert::false($result->status->isSuccessful());
@@ -148,6 +146,13 @@ final class PropertyRunnerE2ETest
         Assert::same($result->failure->getCounterExample()->shrunkArguments['value'], 1);
         Assert::instanceOf($result->failure->getCounterExample()->failure, \ErrorException::class);
         Assert::string($result->failure->getCounterExample()->failure?->getMessage())->contains('diagnostic for');
+    }
+
+    public function anExpectExceptionAttributeCanBeSatisfiedByEveryRun(): void
+    {
+        $result = TestRunner::runTest([ExpectExceptionFixture::class, 'throwsTheExpectedException']);
+
+        Assert::same($result->status, Status::Passed);
     }
 
     public function throwsPassesABodyThatOnlyThrowsWithoutReportingItRisky(): void

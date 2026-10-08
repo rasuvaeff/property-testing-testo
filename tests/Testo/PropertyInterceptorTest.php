@@ -304,31 +304,6 @@ final class PropertyInterceptorTest
         }
     }
 
-    public function anExpectExceptionAttributeCombinedWithAPropertyIsAnError(): void
-    {
-        // Testo's expectation interceptor sits outside this one and sees only
-        // the aggregate PropertyViolationException — a RuntimeException — so
-        // `#[ExpectException(\RuntimeException::class)]` would be satisfied by
-        // any falsification, a failed assertion included.
-        $interceptor = new PropertyInterceptor($this->createMessenger());
-        $runs = 0;
-        $next = static function (TestInfo $info) use (&$runs): TestResult {
-            ++$runs;
-
-            return new TestResult(info: $info, status: Status::Passed);
-        };
-
-        $result = $interceptor->runTest($this->info(ExpectExceptionStub::class, 'check'), $next);
-
-        Assert::same($result->status, Status::Error);
-        Assert::instanceOf($result->failure, \InvalidArgumentException::class);
-        Assert::same(
-            $result->failure->getMessage(),
-            '#[Property] on "check" cannot be combined with #[ExpectException]; use throws: instead',
-        );
-        Assert::same($runs, 0);
-    }
-
     public function throwsPassesARunThatEndsWithTheExpectedException(): void
     {
         $interceptor = new PropertyInterceptor($this->createMessenger());

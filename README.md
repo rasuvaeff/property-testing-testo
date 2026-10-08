@@ -149,6 +149,11 @@ What the adapter does and does not combine with:
   to `ErrorException`s. The default `0` leaves normal handling unchanged;
   `failOn` explicitly observes levels Testo masks suite-wide, and `@`-suppressed
   diagnostics remain suppressed.
+- **Assertion and test-double expectations are checked on every property run.**
+  Testo's assertion interceptors run inside the property loop, so a failed
+  expectation belongs to the input that failed it and is shrunk like any other
+  falsification. Build per-input doubles in a `#[BeforeTest]` hook when their
+  state must not carry across generated inputs.
 - **A data provider cannot be combined with `#[Property]`** — the generators
   supply the arguments — and `#[Property]` on a function-based case is
   refused: both are reported as an error of the test with a message, as is
@@ -157,16 +162,12 @@ What the adapter does and does not combine with:
   parameter of the property). The attribute itself validates nothing: Testo
   instantiates it before the interceptor runs, so the interceptor is the one
   place that can name the property in the message.
-- **`#[ExpectException]` cannot be combined with `#[Property]`** and is
-  refused as an error of the test: the expectation interceptor runs outside
-  this one and observes the property's aggregate failure — a
-  `PropertyViolationException`, which is a `RuntimeException` — so
-  `#[ExpectException(\RuntimeException::class)]` would be satisfied by any
-  falsification, a failed assertion included. State the expectation per run
-  with [`throws:`](#expected-exceptions-throws) instead — not with
-  `Expect::exception()` in the body either: it registers an expectation the
-  same outer interceptor judges against the aggregate, and no guard can see
-  it.
+- **Testo expectations run once per generated input.** `#[ExpectException]`
+  and `Expect::exception()` are evaluated inside the property loop, so they
+  cannot accidentally accept the aggregate `PropertyViolationException`.
+  Prefer [`throws:`](#expected-exceptions-throws) for a property-wide
+  per-input exception contract; it also works without Testo's expectation
+  plugin.
 - **A `SkipTest` thrown from the body or a hook skips the run**; when every
   run skipped, the property is reported as a skipped test. Partly skipped runs
   spend a budget of their own, separate from `maxDiscards`: a skip is not a
