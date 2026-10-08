@@ -103,8 +103,9 @@ final class ListReversalProperties
      * Expected exception: `throws:` states, per run, the class the body must
      * throw. A run that throws it passes (the throw is recorded as an
      * assertion); one that returns normally, or throws something else, is a
-     * counterexample and shrinks like any other. `#[ExpectException]` cannot
-     * do this — it judges the aggregate result — and is refused on a property.
+     * counterexample and shrinks like any other. Testo's `#[ExpectException]`
+     * also works on a property and is checked separately on every generated
+     * input.
      */
     #[Property(runs: 200, throws: \DivisionByZeroError::class)]
     public function dividingByZeroThrows(int $dividend): void
