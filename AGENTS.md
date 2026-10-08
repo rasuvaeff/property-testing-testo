@@ -158,7 +158,7 @@ replay (`PropertyDefinition::$replayRegressions = false`), the **env**
 - **Aggregate results must carry per-run `TestResult` attributes.** Downstream
   interceptors attach per-run attributes to each `$next()` result — Testo
   codecov's `CoverageResult` among them (`InterceptorOptions::ORDER_COVERAGE`,
-  well inside this interceptor's `ORDER_CLOSE_TO_TEST`; the innermost of all is
+  inside this interceptor's `ORDER_ASSERTIONS - 200`; the innermost of all is
   the lifecycle interceptor at `PHP_INT_MAX`, which is why a hook runs inside
   `$next()` on every trial). `TestoTrialExecutor` merges every executed run's attributes
   (last write per key wins) and the interceptor puts that aggregate on the one
@@ -207,16 +207,18 @@ replay (`PropertyDefinition::$replayRegressions = false`), the **env**
   `Status::Aborted` with `Error during test execution pipeline.` on top and
   the reason buried in `previous`. Every refusal — out-of-range values, a
   non-callable array provider, `path` without `seed`, a non-Throwable
-  `throws`, `#[ExpectException]` beside the attribute — lives in
-  `PropertyInterceptor` and names the property.
+  `throws` — lives in `PropertyInterceptor` and names the property.
+  `#[ExpectException]` is supported: the property interceptor wraps Testo's
+  assertion layer, so the expectation runs inside each generated run.
 - **`throws:` is checked by `TestoTrialExecutor`, on the returned result and
   on a throw alike.** A body that throws never reaches Testo's
   `#[ExpectException]` (the terminal handler turns the throw into the run's
-  result first; the outer expectation judges the aggregate), which is why the
-  attribute combination is refused. A matching throw is recorded through
-  `Assert::instanceOf()` so the aggregate is not `Risky` for a body that
-  asserts nothing else — `throws:` with `#[ExpectNoAssertions]` therefore
-  comes out `Risky`, as Testo's own expectation would.
+  result first; the per-run expectation judges it). `throws:` is an adapter
+  alternative when the expected exception belongs to the property contract.
+  A matching throw is recorded through `Assert::instanceOf()` so the aggregate
+  is not `Risky` for a body that asserts nothing else — `throws:` with
+  `#[ExpectNoAssertions]` therefore comes out `Risky`, as Testo's own
+  expectation would.
 - **CI workflows are SHA-pinned.** Every `uses:` in `.github/workflows/*.yml`
   references a 40-char commit SHA with a `# vN` trailing comment
   (e.g. `actions/checkout@<sha> # v4`). Never revert to floating `@vN` tags.

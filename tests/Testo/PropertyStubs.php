@@ -12,7 +12,6 @@ use Rasuvaeff\PropertyTesting\Property;
 use Rasuvaeff\PropertyTesting\Runner\EdgeCases;
 use Rasuvaeff\PropertyTesting\Runner\Phase;
 use Rasuvaeff\PropertyTesting\Runner\ShrinkMode;
-use Testo\Assert\ExpectException;
 
 /**
  * Fixtures for {@see \Rasuvaeff\PropertyTesting\Testo\Tests\PropertyInterceptorTest}.
@@ -826,19 +825,6 @@ final class UnknownKeyStub
     public static function provide(): array
     {
         return ['x' => Gen::intBetween(1, 10), 'y' => Gen::constant(value: 7)];
-    }
-}
-
-final class ExpectExceptionStub
-{
-    #[Property(runs: 5, seed: 1, generators: 'provide')]
-    #[ExpectException(\RuntimeException::class)]
-    public function check(int $x): void {}
-
-    /** @return array<string, ArbitraryInterface> */
-    public static function provide(): array
-    {
-        return ['x' => Gen::intBetween(1, 10)];
     }
 }
 

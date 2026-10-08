@@ -144,6 +144,11 @@ What the adapter does and does not combine with:
   Testo's lifecycle interceptor, so `#[BeforeTest]`/`#[AfterTest]` execute
   once per generated input, not once per test (PHPUnit's `setUp` runs once).
   A hook that throws is that run's failure and is shrunk like any other.
+- **Assertion and test-double expectations are checked on every property run.**
+  Testo's assertion interceptors run inside the property loop, so a failed
+  expectation belongs to the input that failed it and is shrunk like any other
+  falsification. Build per-input doubles in a `#[BeforeTest]` hook when their
+  state must not carry across generated inputs.
 - **A data provider cannot be combined with `#[Property]`** — the generators
   supply the arguments — and `#[Property]` on a function-based case is
   refused: both are reported as an error of the test with a message, as is
@@ -152,16 +157,12 @@ What the adapter does and does not combine with:
   parameter of the property). The attribute itself validates nothing: Testo
   instantiates it before the interceptor runs, so the interceptor is the one
   place that can name the property in the message.
-- **`#[ExpectException]` cannot be combined with `#[Property]`** and is
-  refused as an error of the test: the expectation interceptor runs outside
-  this one and observes the property's aggregate failure — a
-  `PropertyViolationException`, which is a `RuntimeException` — so
-  `#[ExpectException(\RuntimeException::class)]` would be satisfied by any
-  falsification, a failed assertion included. State the expectation per run
-  with [`throws:`](#expected-exceptions-throws) instead — not with
-  `Expect::exception()` in the body either: it registers an expectation the
-  same outer interceptor judges against the aggregate, and no guard can see
-  it.
+- **Testo expectations run once per generated input.** `#[ExpectException]`
+  and `Expect::exception()` are evaluated inside the property loop, so they
+  cannot accidentally accept the aggregate `PropertyViolationException`.
+  Prefer [`throws:`](#expected-exceptions-throws) for a property-wide
+  per-input exception contract; it also works without Testo's expectation
+  plugin.
 - **A `SkipTest` thrown from the body or a hook skips the run**; when every
   run skipped, the property is reported as a skipped test. Partly skipped runs
   spend a budget of their own, separate from `maxDiscards`: a skip is not a
@@ -356,7 +357,7 @@ public function delayStaysWithinCap(
 | `path` | Replays a recorded shrink descent (`CounterExample::$path`) instead of searching for it; requires `seed` |
 | `edgeCases` | `EdgeCases::None` turns off the numeric boundary bias — for a property the edges only cost runs |
 | `auto` | Derives generators from the property's signature for every parameter the provider does not cover; the provider becomes partial overrides. Off by default, and stays off |
-| `throws` | The exception class every run must throw — a run that throws it passes, one that returns normally or throws another class fails and shrinks. The per-run replacement for `#[ExpectException]`, which is refused on a property |
+| `throws` | The exception class every run must throw — a run that throws it passes, one that returns normally or throws another class fails and shrinks. An adapter alternative to Testo's per-run `#[ExpectException]` |
 | `exhaustive` | Walk the whole parameter domain instead of sampling it when every generator is `Enumerable` and the product fits `exhaustiveBudget`; otherwise the phase samples and a warning says why. `runs` is ignored when it walks — see the [core README](https://github.com/rasuvaeff/property-testing-core#exhaustive-mode) |
 | `exhaustiveBudget` | The largest domain `exhaustive` walks (default 10 000) |
 | `flakyReplays` | Re-executions of the minimised counterexample (default 2); one that passes marks the counterexample flaky, with a `Flaky:` line in the failure. `0` disables — see [flaky detection](https://github.com/rasuvaeff/property-testing-core#flaky-detection) |

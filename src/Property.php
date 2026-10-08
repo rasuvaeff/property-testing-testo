@@ -101,8 +101,8 @@ final readonly class Property implements Interceptable
      *        `Expected <class> to be thrown, but it was not` and shrinks like any other
      *        counterexample; one that throws another class fails with that throw. A skip and an
      *        `Assume::that()` discard keep their meaning — never a pass earned by throwing. This is
-     *        the per-run replacement for `#[ExpectException]`, which observes the aggregate result
-     *        and is refused on a property. The matching throw is recorded as an assertion, so a
+     *        the adapter alternative to `#[ExpectException]`, which is also checked per run. The
+     *        matching throw is recorded as an assertion, so a
      *        body that asserts nothing else is not reported as risky.
      * @param bool $exhaustive Walk the whole parameter domain instead of sampling it, when every
      *        generator has a finite domain (`Enumerable`) and the product fits $exhaustiveBudget;
