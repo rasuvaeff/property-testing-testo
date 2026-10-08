@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0 — 2026-10-08
+
+- **Changed:** Testo assertion and test-double expectations now run for every generated property input, so an unmet expectation identifies and shrinks the failing input. `#[ExpectException]` is evaluated per run. (#66)
+- **Added:** `#[Property(failOn: ...)]` converts selected PHP warnings, notices and deprecations into `ErrorException` failures for the generated input; the failure shrinks with that input, while `@` suppression remains effective. (#67)
+
 ## 1.1.0 — 2026-10-02
 
 - **Added:** generators written on the property's parameters with core's
