@@ -418,6 +418,22 @@ final class PropertyInterceptorTest
         Assert::string($e->getMessage())->contains('make it static');
     }
 
+    public function aProviderCalledWithTheWrongArityIsThisTestsErrorNamingTheProperty(): void
+    {
+        $e = $this->misconfiguration(WrongArityProviderStub::class);
+
+        Assert::string($e->getMessage())->contains('#[Property] on "check" cannot be set up: ');
+        Assert::instanceOf($e->getPrevious(), \TypeError::class);
+    }
+
+    public function aProviderRaisingAValueErrorIsThisTestsErrorNamingTheProperty(): void
+    {
+        $e = $this->misconfiguration(ValueErrorProviderStub::class);
+
+        Assert::same($e->getMessage(), '#[Property] on "check" cannot be set up: bad range');
+        Assert::instanceOf($e->getPrevious(), \ValueError::class);
+    }
+
     public function aNonStaticProviderRunsOnTheTestCaseInstance(): void
     {
         $interceptor = new PropertyInterceptor($this->createMessenger());
@@ -1082,6 +1098,63 @@ final class PropertyInterceptorTest
         );
 
         Assert::true($executor->execute(['x' => 7])->isPassed());
+    }
+
+    public function failOnDelegatesANonMatchingDiagnosticToThePreviousHandler(): void
+    {
+        $seen = [];
+        // A legal handler may return any value; the installed one must hand PHP a bool.
+        $previous = static function (int $severity, string $message) use (&$seen): int {
+            $seen[] = [$severity, $message];
+
+            return 1;
+        };
+        set_error_handler($previous);
+
+        try {
+            $executor = new TestoTrialExecutor(
+                $this->info(PassingStub::class, 'check'),
+                static function (TestInfo $info): TestResult {
+                    trigger_error('not watched', E_USER_NOTICE);
+
+                    return new TestResult(info: $info, status: Status::Passed);
+                },
+                failOn: E_USER_WARNING,
+            );
+
+            $outcome = $executor->execute(['x' => 7]);
+        } finally {
+            restore_error_handler();
+        }
+
+        Assert::true($outcome->isPassed());
+        Assert::same($seen, [[E_USER_NOTICE, 'not watched']]);
+    }
+
+    public function anAssumptionThrownByTheBodyDiscardsTheRun(): void
+    {
+        $executor = new TestoTrialExecutor(
+            $this->info(PassingStub::class, 'check'),
+            static function (TestInfo $info): TestResult {
+                throw new AssumptionSkipped('not this input');
+            },
+        );
+
+        $outcome = $executor->execute(['x' => 1]);
+
+        Assert::true($outcome->isDiscarded());
+        Assert::false($outcome->isSkipped());
+        Assert::false($outcome->isFailed());
+    }
+
+    public function aRiskyRunWithoutAFailureIsASuccessfulCheck(): void
+    {
+        $executor = new TestoTrialExecutor(
+            $this->info(PassingStub::class, 'check'),
+            static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Risky),
+        );
+
+        Assert::true($executor->execute(['x' => 1])->isPassed());
     }
 
     /**

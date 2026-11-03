@@ -6,6 +6,8 @@ namespace Rasuvaeff\PropertyTesting\Testo\Tests;
 
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Rasuvaeff\PropertyTesting\Event\RunStarted;
+use Rasuvaeff\PropertyTesting\Event\TargetImproved;
+use Rasuvaeff\PropertyTesting\Runner\TargetDirection;
 use Rasuvaeff\PropertyTesting\Testo\VerboseListener;
 use Testo\Application\Internal\MessengerHub;
 use Testo\Assert;
@@ -35,6 +37,22 @@ final class VerboseListenerTest
 
         Assert::same(count($lines), 1);
         Assert::same($lines[0], 'Property "bare-id" attempt 1: x=7');
+    }
+
+    public function aTargetImprovementIsPrintedWithItsDirectionAndPreviousBest(): void
+    {
+        $messenger = $this->messenger();
+        $listener = new VerboseListener($messenger);
+
+        $listener->onEvent(new TargetImproved('Cls::prop', 'depth', TargetDirection::Maximize, 3.0, null, ['x' => 7]));
+        $listener->onEvent(new TargetImproved('Cls::prop', 'size', TargetDirection::Minimize, 1.0, 2.0, ['x' => 5]));
+
+        $lines = $this->lines($messenger);
+
+        Assert::same($lines, [
+            'Property "prop" target depth max: - -> 3 (x=7)',
+            'Property "prop" target size min: 2 -> 1 (x=5)',
+        ]);
     }
 
     /**

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Changed:** `composer mutation` now runs Infection with `--with-uncovered`, so code the tests execute but do not name in `#[Covers]` is mutated and counted in the MSI (421 mutants instead of 396; overall MSI stays 100%). The infection config gains the shared template entries (ignore of parameter defaults in signatures, `PublicVisibility`/`ProtectedVisibility` off). Tests added for the setup-error `TypeError`/`ValueError` path, a thrown `AssumptionSkipped`, a risky run without a failure, `failOn` delegation to a previous error handler, and the `TargetImproved` verbose line. No `src/` changes.
+
 ## 1.2.0 — 2026-10-08
 
 - **Changed:** Testo assertion and test-double expectations now run for every generated property input, so an unmet expectation identifies and shrinks the failing input. `#[ExpectException]` is evaluated per run. (#66)

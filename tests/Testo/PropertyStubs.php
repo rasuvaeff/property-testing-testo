@@ -752,6 +752,30 @@ final class InstanceProviderStub
     }
 }
 
+final class WrongArityProviderStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(int $required): array
+    {
+        return ['x' => Gen::intBetween($required, 10)];
+    }
+}
+
+final class ValueErrorProviderStub
+{
+    #[Property(runs: 1, seed: 1, generators: 'provide')]
+    public function check(int $x): void {}
+
+    /** @return array<string, ArbitraryInterface> */
+    public static function provide(): array
+    {
+        throw new \ValueError('bad range');
+    }
+}
+
 final class NonArrayGeneratorsStub
 {
     #[Property(runs: 1, seed: 1, generators: 'provide')]
