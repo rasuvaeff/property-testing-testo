@@ -191,8 +191,13 @@ final class TestoTrialExecutor implements TrialExecutor
 
         // Recorded on the test's assertion history, as Testo records its own
         // fulfilled expectation: a body whose only check is the throw would
-        // otherwise come back Risky for asserting nothing.
-        Assert::instanceOf($failure, $this->expectedExceptionClass);
+        // otherwise come back Risky for asserting nothing. The instanceof
+        // above has already proved it, so the value crosses as `mixed` —
+        // the call is a record, not a proof, and Psalm 7 rejects a redundant
+        // assert it can see through.
+        /** @var mixed $thrown */
+        $thrown = $failure;
+        Assert::instanceOf($thrown, $this->expectedExceptionClass);
 
         return TrialOutcome::passed();
     }
