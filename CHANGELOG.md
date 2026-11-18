@@ -2,13 +2,15 @@
 
 ## Unreleased
 
-- deps: temporary `testo/testo` constraint `>=0.10.39 <0.10.58`. The
-  `testo/error-handler` plugin that testo 0.10.57+ requires installs an error
-  handler around every test, so a previous handler is always callable during a
-  test — the `return false` fallback of this adapter's `failOn` handler never
-  executes in the suite, and Infection reports its mutant as `Not Covered`,
-  failing the 100% MSI gate (upstream report: php-testo/testo#429). Lift the
-  cap once the upstream behavior is settled.
+- mutation: `FalseValue` in `TestoTrialExecutor::execute` is ignored (scoped
+  to that method — the only `false` literal in it). testo 0.10.57+ requires
+  the `testo/error-handler` plugin, which installs an error handler around
+  every test, so a previous handler is always callable during a test and the
+  `return false` fallback of the adapter's `failOn` handler never executes in
+  the suite: with `--with-uncovered` the mutant is unkillable and the 100% MSI
+  gate fails on an unchanged package (upstream report: php-testo/testo#429).
+  The runtime `require` stays `^0.10.39` — consumers are not affected. Lift
+  the ignore once the upstream behavior is settled.
 
 ## Unreleased
 
