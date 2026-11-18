@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- deps: temporary `testo/testo` constraint `>=0.10.39 <0.10.58`. The
+  `testo/error-handler` plugin that testo 0.10.57+ requires installs an error
+  handler around every test, so a previous handler is always callable during a
+  test — the `return false` fallback of this adapter's `failOn` handler never
+  executes in the suite, and Infection reports its mutant as `Not Covered`,
+  failing the 100% MSI gate (upstream report: php-testo/testo#429). Lift the
+  cap once the upstream behavior is settled.
+
+## Unreleased
+
 - **Changed:** `composer mutation` now runs Infection with `--with-uncovered`, so code the tests execute but do not name in `#[Covers]` is mutated and counted in the MSI (421 mutants instead of 396; overall MSI stays 100%). The infection config gains the shared template entries (ignore of parameter defaults in signatures, `PublicVisibility`/`ProtectedVisibility` off). Tests added for the setup-error `TypeError`/`ValueError` path, a thrown `AssumptionSkipped`, a risky run without a failure, `failOn` delegation to a previous error handler, and the `TargetImproved` verbose line. No `src/` changes.
 
 ## 1.2.0 — 2026-10-08
