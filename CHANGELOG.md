@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- mutation: the temporary `FalseValue` ignore for `TestoTrialExecutor::execute` is lifted — upstream confirmed the escape hatch (php-testo/testo#429): `#[WithoutErrorHandler]` opts a test out of the error-handler plugin, so a new test runs the executor's `return false` fallback with a genuinely empty handler stack and kills the mutant. MSI is 100% with no ignores beyond the shared template ones.
+
 - deps: `vimeo/psalm` `^6.16` → `^7.0`. Psalm 7 flags the `Assert::instanceOf()` that records a fulfilled `throws:` on the assertion history as a redundant condition (the `instanceof` guard above it has already proved it), so the value crosses to the assert as `mixed` — the call is a record, not a proof.
 - mutation: `FalseValue` in `TestoTrialExecutor::execute` is ignored (scoped
   to that method — the only `false` literal in it). testo 0.10.57+ requires

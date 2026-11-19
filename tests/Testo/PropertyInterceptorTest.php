@@ -49,6 +49,7 @@ use Testo\Core\Log\Message;
 use Testo\Core\Value\CaseInstance;
 use Testo\Core\Value\Status;
 use Testo\Data\DataProvider;
+use Testo\ErrorHandler\WithoutErrorHandler;
 use Testo\Lifecycle\AfterTest;
 use Testo\Lifecycle\BeforeTest;
 use Testo\Test;
@@ -1098,6 +1099,45 @@ final class PropertyInterceptorTest
         );
 
         Assert::true($executor->execute(['x' => 7])->isPassed());
+    }
+
+    /**
+     * The fallback branch of the failOn handler: no previous handler, a
+     * non-matching diagnostic, and PHP's standard handling must run — the
+     * notice reaches the output only when the handler returns false.
+     *
+     * `#[WithoutErrorHandler]` opts this test out of the error-handler plugin
+     * (php-testo/testo#429), so `set_error_handler()` inside the executor sees
+     * no previous handler, exactly as in production code that runs outside a
+     * test. On testo versions without the plugin the stack is naturally empty
+     * and the attribute is inert.
+     */
+    #[WithoutErrorHandler]
+    public function failOnHandsANonMatchingDiagnosticToStandardHandlingWhenThereIsNoPreviousHandler(): void
+    {
+        $reporting = error_reporting();
+        $executor = new TestoTrialExecutor(
+            $this->info(PassingStub::class, 'check'),
+            static function (TestInfo $info): TestResult {
+                trigger_error('not watched', E_USER_NOTICE);
+
+                return new TestResult(info: $info, status: Status::Passed);
+            },
+            failOn: E_USER_WARNING,
+        );
+
+        ob_start();
+
+        try {
+            error_reporting(E_ALL);
+            $outcome = $executor->execute(['x' => 7]);
+        } finally {
+            error_reporting($reporting);
+            $captured = ob_get_clean();
+        }
+
+        Assert::true($outcome->isPassed());
+        Assert::string($captured)->contains('Notice: not watched');
     }
 
     public function failOnDelegatesANonMatchingDiagnosticToThePreviousHandler(): void
