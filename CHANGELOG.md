@@ -3,15 +3,7 @@
 ## Unreleased
 
 - deps: `vimeo/psalm` `^6.16` → `^7.0`. Psalm 7 flags the `Assert::instanceOf()` that records a fulfilled `throws:` on the assertion history as a redundant condition (the `instanceof` guard above it has already proved it), so the value crosses to the assert as `mixed` — the call is a record, not a proof.
-- mutation: `FalseValue` in `TestoTrialExecutor::execute` is ignored (scoped
-  to that method — the only `false` literal in it). testo 0.10.57+ requires
-  the `testo/error-handler` plugin, which installs an error handler around
-  every test, so a previous handler is always callable during a test and the
-  `return false` fallback of the adapter's `failOn` handler never executes in
-  the suite: with `--with-uncovered` the mutant is unkillable and the 100% MSI
-  gate fails on an unchanged package (upstream report: php-testo/testo#429).
-  The runtime `require` stays `^0.10.39` — consumers are not affected. Lift
-  the ignore once the upstream behavior is settled.
+- test: the `failOn` fallback for a run with no previous error handler is covered by a test opted out of Testo's error-handler plugin with `#[WithoutErrorHandler]`, so the 100% MSI gate holds on testo 0.10.57+ without ignoring the `FalseValue` mutant in `TestoTrialExecutor::execute` (php-testo/testo#429).
 - **Changed:** `composer mutation` now runs Infection with `--with-uncovered`, so code the tests execute but do not name in `#[Covers]` is mutated and counted in the MSI (421 mutants instead of 396; overall MSI stays 100%). The infection config gains the shared template entries (ignore of parameter defaults in signatures, `PublicVisibility`/`ProtectedVisibility` off). Tests added for the setup-error `TypeError`/`ValueError` path, a thrown `AssumptionSkipped`, a risky run without a failure, `failOn` delegation to a previous error handler, and the `TargetImproved` verbose line. No `src/` changes.
 
 ## 1.2.0 — 2026-10-08

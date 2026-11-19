@@ -49,6 +49,7 @@ use Testo\Core\Log\Message;
 use Testo\Core\Value\CaseInstance;
 use Testo\Core\Value\Status;
 use Testo\Data\DataProvider;
+use Testo\ErrorHandler\WithoutErrorHandler;
 use Testo\Lifecycle\AfterTest;
 use Testo\Lifecycle\BeforeTest;
 use Testo\Test;
@@ -1129,6 +1130,31 @@ final class PropertyInterceptorTest
 
         Assert::true($outcome->isPassed());
         Assert::same($seen, [[E_USER_NOTICE, 'not watched']]);
+    }
+
+    /**
+     * Opted out of Testo's error-handler plugin, so no handler sits below the
+     * adapter's one: a non-matching diagnostic goes to PHP's own handling, which
+     * records it for error_get_last(). Silenced with @ to keep it off the output.
+     */
+    #[WithoutErrorHandler]
+    public function failOnLeavesANonMatchingDiagnosticToPhpWithoutAPreviousHandler(): void
+    {
+        $executor = new TestoTrialExecutor(
+            $this->info(PassingStub::class, 'check'),
+            static function (TestInfo $info): TestResult {
+                @trigger_error('left to PHP', E_USER_NOTICE);
+
+                return new TestResult(info: $info, status: Status::Passed);
+            },
+            failOn: E_USER_WARNING,
+        );
+
+        error_clear_last();
+        $outcome = $executor->execute(['x' => 7]);
+
+        Assert::true($outcome->isPassed());
+        Assert::same(error_get_last()['message'] ?? null, 'left to PHP');
     }
 
     public function anAssumptionThrownByTheBodyDiscardsTheRun(): void
