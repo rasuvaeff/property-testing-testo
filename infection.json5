@@ -15,18 +15,6 @@
     "minMsi": 100,
     "mutators": {
         "@default": true,
-        // testo 0.10.57+ requires the testo/error-handler plugin, which installs
-        // an error handler around every test — inside a test a previous handler
-        // is therefore ALWAYS callable, and the "no previous handler" fallback
-        // of this adapter's failOn handler (TestoTrialExecutor::execute, the
-        // `return false;`) never executes under a suite run: pcov marks it Not
-        // Covered and, with --with-uncovered, the mutant is unkillable whatever
-        // the tests do. Scoped to that one method (the only `false` literal in
-        // it), so FalseValue mutants anywhere else stay enforced. Lift with the
-        // upstream discussion (php-testo/testo#429).
-        "FalseValue": {
-            "ignore": ["Rasuvaeff\\PropertyTesting\\Testo\\TestoTrialExecutor::execute"]
-        },
         // Constructor/method parameter declarations with a default value
         // (`private int $x = 100,`, `bool $strict = false,`): the mutant sits on a
         // signature line with no executable opcode under pcov, so it is reported Not
