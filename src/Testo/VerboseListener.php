@@ -105,10 +105,14 @@ final readonly class VerboseListener implements PropertyListener
     }
 
     /**
+     * On CHANNEL_STDERR, like the distribution report: Testo's terminal
+     * renderer shows every other channel only at `-v`, and a trace someone
+     * switched on with PROPERTY_VERBOSE must not need a second switch.
+     *
      * @param non-empty-string $line
      */
     private function log(string $line): void
     {
-        $this->messenger->log(Messenger::CHANNEL_STDOUT, $line, Level::Info);
+        $this->messenger->log(Messenger::CHANNEL_STDERR, $line, Level::Info);
     }
 }

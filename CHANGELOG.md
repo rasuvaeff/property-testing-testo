@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## 1.2.1 — 2026-11-20
 
+- **Fixed:** the `PROPERTY_VERBOSE` trace went to Testo's `CHANNEL_STDOUT`, which the terminal renderer shows only with `-v` — observed in a real run on Testo 0.10.59: without `-v`, no trace line for a passing or a failing property. It is now on `CHANNEL_STDERR`, like the distribution report and the discard warning, and shows at normal verbosity (#84).
+- **Fixed:** an exception the engine throws out of `PropertyRunner::run()` (any `PropertyTestingException`) is reported as an error of that test, its message intact, instead of aborting Testo's pipeline with an opaque `PipelineFailure`. With core 1.4 this is `GenerationErrorException` — a generator that threw while drawing an input — whose message carries the seed and attempt that reproduce it (rasuvaeff/property-testing-core#185). Other exceptions out of a listener still abort the run, as before.
+- **Docs:** the `AGENTS.md` environment contract lists `PROPERTY_EXHAUSTIVE` and `PROPERTY_SEARCH_RUNS` (#85).
 - deps: `vimeo/psalm` `^6.16` → `^7.0`. Psalm 7 flags the `Assert::instanceOf()` that records a fulfilled `throws:` on the assertion history as a redundant condition (the `instanceof` guard above it has already proved it), so the value crosses to the assert as `mixed` — the call is a record, not a proof.
 - test: the `failOn` fallback for a run with no previous error handler is covered by a test opted out of Testo's error-handler plugin with `#[WithoutErrorHandler]`, so the 100% MSI gate holds on testo 0.10.57+ without ignoring the `FalseValue` mutant in `TestoTrialExecutor::execute` (php-testo/testo#429).
 - **Changed:** `composer mutation` now runs Infection with `--with-uncovered`, so code the tests execute but do not name in `#[Covers]` is mutated and counted in the MSI (421 mutants instead of 396; overall MSI stays 100%). The infection config gains the shared template entries (ignore of parameter defaults in signatures, `PublicVisibility`/`ProtectedVisibility` off). Tests added for the setup-error `TypeError`/`ValueError` path, a thrown `AssumptionSkipped`, a risky run without a failure, `failOn` delegation to a previous error handler, and the `TargetImproved` verbose line. No `src/` changes.

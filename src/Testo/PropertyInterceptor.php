@@ -9,6 +9,7 @@ use Rasuvaeff\PropertyTesting\Gen;
 use Rasuvaeff\PropertyTesting\Generate;
 use Rasuvaeff\PropertyTesting\Property;
 use Rasuvaeff\PropertyTesting\PropertyListener;
+use Rasuvaeff\PropertyTesting\PropertyTestingException;
 use Rasuvaeff\PropertyTesting\Runner\Clock;
 use Rasuvaeff\PropertyTesting\Runner\Corpus;
 use Rasuvaeff\PropertyTesting\Runner\CorpusFactory;
@@ -201,7 +202,16 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
         }
 
         $executor = new TestoTrialExecutor($info, \Closure::fromCallable($next), $property->throws, $property->failOn);
-        $result = $this->runner->run($definition, $executor, $listeners, $corpus);
+
+        try {
+            $result = $this->runner->run($definition, $executor, $listeners, $corpus);
+        } catch (PropertyTestingException $engineError) {
+            // Thrown, not returned, by the engine: core 1.4's
+            // GenerationErrorException for a generator that threw (the seed and
+            // attempt are in its message). An error of this test — not an
+            // aborted pipeline with the reason buried in a previous exception.
+            return new TestResult(info: $info, status: Status::Error, failure: $engineError);
+        }
 
         if ($executor->everyRunSkipped()) {
             // Every run skipped (a `SkipTest` thrown from the body or a hook):

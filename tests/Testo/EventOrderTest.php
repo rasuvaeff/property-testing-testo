@@ -21,6 +21,7 @@ use Rasuvaeff\PropertyTesting\Event\RunPassed;
 use Rasuvaeff\PropertyTesting\Event\ShrinkAccepted;
 use Rasuvaeff\PropertyTesting\Event\ShrinkTried;
 use Rasuvaeff\PropertyTesting\GaveUpException;
+use Rasuvaeff\PropertyTesting\GenerationExhaustedException;
 use Rasuvaeff\PropertyTesting\PropertyListener;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Rasuvaeff\PropertyTesting\RegressionViolationException;
@@ -307,6 +308,33 @@ final class EventOrderTest
         };
 
         $this->interceptor($throwing)->runTest($this->info(PassingStub::class, 'check'), $this->pass());
+    }
+
+    /**
+     * An exception the engine itself throws out of run() — core 1.4 does so
+     * for a generator that threw, naming the seed — is reported as an error of
+     * this test instead of aborting Testo's pipeline. A listener is the one
+     * place that can raise an engine exception on every supported core.
+     */
+    public function anEngineExceptionThrownOutOfTheRunIsAnErrorOfTheTest(): void
+    {
+        $failure = new GenerationExhaustedException('Gen::filter()', 3, 'nothing passed');
+        $throwing = new readonly class ($failure) implements PropertyListener {
+            public function __construct(
+                private GenerationExhaustedException $failure,
+            ) {}
+
+            #[\Override]
+            public function onEvent(PropertyEvent $event): void
+            {
+                throw $this->failure;
+            }
+        };
+
+        $result = $this->interceptor($throwing)->runTest($this->info(PassingStub::class, 'check'), $this->pass());
+
+        Assert::same($result->status, Status::Error);
+        Assert::same($result->failure, $failure);
     }
 
     /**

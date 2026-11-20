@@ -62,7 +62,7 @@ final class VerboseListenerTest
     {
         return array_map(
             static fn(object $message): string => (string) $message->content,
-            $messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT),
+            $messenger->getMessages()->channel(Messenger::CHANNEL_STDERR),
         );
     }
 
