@@ -210,7 +210,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
             // GenerationErrorException for a generator that threw (the seed and
             // attempt are in its message). An error of this test — not an
             // aborted pipeline with the reason buried in a previous exception.
-            return new TestResult(info: $info, status: Status::Error, failure: $engineError);
+            return new TestResult(info: $info, status: Status::Error, failure: $engineError, attributes: $executor->attributes());
         }
 
         if ($executor->everyRunSkipped()) {

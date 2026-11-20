@@ -18,6 +18,7 @@ use Rasuvaeff\PropertyTesting\Event\PropertyEvent;
 use Rasuvaeff\PropertyTesting\Event\PropertyFinished;
 use Rasuvaeff\PropertyTesting\Event\PropertyStarted;
 use Rasuvaeff\PropertyTesting\Event\RunPassed;
+use Rasuvaeff\PropertyTesting\Event\RunStarted;
 use Rasuvaeff\PropertyTesting\Event\ShrinkAccepted;
 use Rasuvaeff\PropertyTesting\Event\ShrinkTried;
 use Rasuvaeff\PropertyTesting\GaveUpException;
@@ -327,14 +328,20 @@ final class EventOrderTest
             #[\Override]
             public function onEvent(PropertyEvent $event): void
             {
-                throw $this->failure;
+                // After two runs, so their attributes are already merged.
+                if ($event instanceof RunStarted && $event->attempt === 3) {
+                    throw $this->failure;
+                }
             }
         };
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed, attributes: ['duration' => 10]);
 
-        $result = $this->interceptor($throwing)->runTest($this->info(PassingStub::class, 'check'), $this->pass());
+        $result = $this->interceptor($throwing)->runTest($this->info(PassingStub::class, 'check'), $next);
 
         Assert::same($result->status, Status::Error);
         Assert::same($result->failure, $failure);
+        // The runs that completed keep their attributes (duration summed).
+        Assert::same($result->attributes['duration'], 20);
     }
 
     /**
