@@ -18,9 +18,11 @@ use Rasuvaeff\PropertyTesting\Event\PropertyEvent;
 use Rasuvaeff\PropertyTesting\Event\PropertyFinished;
 use Rasuvaeff\PropertyTesting\Event\PropertyStarted;
 use Rasuvaeff\PropertyTesting\Event\RunPassed;
+use Rasuvaeff\PropertyTesting\Event\RunStarted;
 use Rasuvaeff\PropertyTesting\Event\ShrinkAccepted;
 use Rasuvaeff\PropertyTesting\Event\ShrinkTried;
 use Rasuvaeff\PropertyTesting\GaveUpException;
+use Rasuvaeff\PropertyTesting\GenerationExhaustedException;
 use Rasuvaeff\PropertyTesting\PropertyListener;
 use Rasuvaeff\PropertyTesting\PropertyViolationException;
 use Rasuvaeff\PropertyTesting\RegressionViolationException;
@@ -307,6 +309,39 @@ final class EventOrderTest
         };
 
         $this->interceptor($throwing)->runTest($this->info(PassingStub::class, 'check'), $this->pass());
+    }
+
+    /**
+     * An exception the engine itself throws out of run() — core 1.4 does so
+     * for a generator that threw, naming the seed — is reported as an error of
+     * this test instead of aborting Testo's pipeline. A listener is the one
+     * place that can raise an engine exception on every supported core.
+     */
+    public function anEngineExceptionThrownOutOfTheRunIsAnErrorOfTheTest(): void
+    {
+        $failure = new GenerationExhaustedException('Gen::filter()', 3, 'nothing passed');
+        $throwing = new readonly class ($failure) implements PropertyListener {
+            public function __construct(
+                private GenerationExhaustedException $failure,
+            ) {}
+
+            #[\Override]
+            public function onEvent(PropertyEvent $event): void
+            {
+                // After two runs, so their attributes are already merged.
+                if ($event instanceof RunStarted && $event->attempt === 3) {
+                    throw $this->failure;
+                }
+            }
+        };
+        $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed, attributes: ['duration' => 10]);
+
+        $result = $this->interceptor($throwing)->runTest($this->info(PassingStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Error);
+        Assert::same($result->failure, $failure);
+        // The runs that completed keep their attributes (duration summed).
+        Assert::same($result->attributes['duration'], 20);
     }
 
     /**

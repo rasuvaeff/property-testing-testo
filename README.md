@@ -381,7 +381,7 @@ what the attribute wrote down.
 |---|---|
 | `PROPERTY_RUNS` | Positive integer that overrides every property's run count (dial runs up in CI) |
 | `PROPERTY_SEED` | Integer seed for any property whose attribute omits `seed` (replay a whole suite). An explicit attribute `seed` still wins |
-| `PROPERTY_VERBOSE` | Logs every run's generated arguments and each accepted shrink step. Off for `''`, `0`, `false`, `off` and `no` (case-insensitive, trimmed); anything else enables. |
+| `PROPERTY_VERBOSE` | Logs every run's generated arguments and each accepted shrink step, on Testo's stderr channel — shown without `-v`. Off for `''`, `0`, `false`, `off` and `no` (case-insensitive, trimmed); anything else enables. |
 | `PROPERTY_DB` | Directory path enabling the regression corpus, or a `redis://host[:port][/db][?prefix=key-prefix]` DSN (`rediss://` for TLS) for a corpus shared between CI and developers. Unset means off, nothing is written |
 | `PROPERTY_PHASES` | Comma-separated stage list (`examples,corpus,random,shrink`, case-insensitive) that overrides the attribute — an unknown name throws rather than skipping a stage. `examples,corpus` is the fast pull-request gate |
 | `PROPERTY_DERANDOMIZE` | Derives every unset seed from the property id, making a whole suite reproducible without editing it. `''` leaves the attribute alone; `0`, `false`, `off` and `no` (case-insensitive, trimmed) force it off, overriding `derandomize: true`; anything else forces it on. |

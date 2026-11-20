@@ -2019,7 +2019,7 @@ final class PropertyInterceptorTest
 
             (new PropertyInterceptor($messenger))->runTest($this->info(SearchStub::class, 'check'), $next);
             $lines = array_filter(
-                array_map(static fn($m): string => $m->content, $messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT)),
+                array_map(static fn($m): string => $m->content, $messenger->getMessages()->channel(Messenger::CHANNEL_STDERR)),
                 static fn(string $line): bool => str_contains($line, ' target '),
             );
 
@@ -2043,7 +2043,7 @@ final class PropertyInterceptorTest
 
             // PassingStub runs 5 times.
             $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
-            $messages = $messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT);
+            $messages = $messenger->getMessages()->channel(Messenger::CHANNEL_STDERR);
 
             Assert::same(count($messages), 5);
             Assert::string($messages[0]->content)->contains('attempt 1: x=');
@@ -2072,7 +2072,7 @@ final class PropertyInterceptorTest
             $steps = $result->failure->getCounterExample()->shrinkSteps;
 
             $trace = array_values(array_filter(
-                $messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT),
+                $messenger->getMessages()->channel(Messenger::CHANNEL_STDERR),
                 static fn(Message $message): bool => str_contains($message->content, 'shrink step'),
             ));
 
@@ -2104,7 +2104,7 @@ final class PropertyInterceptorTest
             $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
 
             $trace = array_values(array_filter(
-                $messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT),
+                $messenger->getMessages()->channel(Messenger::CHANNEL_STDERR),
                 static fn(Message $message): bool => str_contains($message->content, 'draws:'),
             ));
 
@@ -2127,7 +2127,7 @@ final class PropertyInterceptorTest
 
             $interceptor->runTest($this->info(PassingStub::class, 'check'), $next);
 
-            Assert::same(count($messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT)), 0);
+            Assert::same(count($messenger->getMessages()->channel(Messenger::CHANNEL_STDERR)), 0);
         } finally {
             $restoreEnv();
         }
@@ -2145,7 +2145,7 @@ final class PropertyInterceptorTest
             // MixedArgumentsStub generates a string, a bool, a null, an array
             // and a datetime — one run pins every branch of the formatter.
             $interceptor->runTest($this->info(MixedArgumentsStub::class, 'check'), $next);
-            $messages = $messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT);
+            $messages = $messenger->getMessages()->channel(Messenger::CHANNEL_STDERR);
 
             Assert::same(count($messages), 1);
             Assert::string($messages[0]->content)->contains('s="fixed"');
@@ -2169,7 +2169,7 @@ final class PropertyInterceptorTest
             $next = static fn(TestInfo $info): TestResult => new TestResult(info: $info, status: Status::Passed);
 
             $interceptor->runTest($this->info(StringableArgStub::class, 'check'), $next);
-            $messages = $messenger->getMessages()->channel(Messenger::CHANNEL_STDOUT);
+            $messages = $messenger->getMessages()->channel(Messenger::CHANNEL_STDERR);
 
             Assert::same(count($messages), 1);
             Assert::string($messages[0]->content)->contains('s=STRINGABLE');
