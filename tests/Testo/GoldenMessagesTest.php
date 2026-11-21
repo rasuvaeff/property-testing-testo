@@ -150,6 +150,25 @@ final class GoldenMessagesTest
         );
     }
 
+    public function discardedExamplesWarning(): void
+    {
+        $messenger = $this->createMessenger();
+        $next = static fn(TestInfo $info): TestResult => $info->arguments[0] >= 100
+            ? new TestResult(info: $info, status: Status::Error, failure: new AssumptionSkipped())
+            : new TestResult(info: $info, status: Status::Passed);
+
+        $result = (new PropertyInterceptor($messenger))->runTest($this->info(ConventionExampleStub::class, 'check'), $next);
+
+        Assert::same($result->status, Status::Passed);
+        $warnings = $messenger->getMessages()->channel(Messenger::CHANNEL_STDERR);
+        Assert::same(count($warnings), 1);
+        Assert::same(
+            $warnings[0]->content,
+            'Property "check" discarded 2 explicit example(s) with Assume::that(); a discarded example checks nothing',
+        );
+        Assert::same($warnings[0]->level, Level::Warning);
+    }
+
     public function coverageViolationMessage(): void
     {
         $next = static function (TestInfo $info): TestResult {

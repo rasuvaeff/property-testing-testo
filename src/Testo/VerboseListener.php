@@ -5,114 +5,40 @@ declare(strict_types=1);
 namespace Rasuvaeff\PropertyTesting\Testo;
 
 use Rasuvaeff\PropertyTesting\Event\PropertyEvent;
-use Rasuvaeff\PropertyTesting\Event\RunDiscarded;
-use Rasuvaeff\PropertyTesting\Event\RunFailed;
-use Rasuvaeff\PropertyTesting\Event\RunPassed;
-use Rasuvaeff\PropertyTesting\Event\RunStarted;
-use Rasuvaeff\PropertyTesting\Event\ShrinkAccepted;
-use Rasuvaeff\PropertyTesting\Event\TargetImproved;
 use Rasuvaeff\PropertyTesting\PropertyListener;
-use Rasuvaeff\PropertyTesting\ValueRenderer;
+use Rasuvaeff\PropertyTesting\Runner\TraceListener;
 use Testo\Common\Messenger;
 use Testo\Core\Log\Level;
 
 /**
- * The `PROPERTY_VERBOSE` trace as a listener: one line per attempt's
- * arguments, one per attempt's in-body draws, one per accepted shrink step.
- * Line formats are the package's characterised output — change them only with
- * the golden tests, in the same commit.
+ * The `PROPERTY_VERBOSE` trace on Testo's messenger: core's
+ * {@see TraceListener} words the lines (one per attempt's arguments, one per
+ * attempt's in-body draws, one per target improvement, one per accepted
+ * shrink step), this adapter only chooses the channel. Line formats are the
+ * package's characterised output — pinned by the golden tests.
  *
- * Exception-hardened by policy: a listener exception normally aborts the run
- * as an infrastructure failure, but a bug in this built-in trace must not fail
- * every verbose consumer, so it swallows its own errors instead.
+ * Exception-hardened by policy, as the core listener is: a bug in the
+ * built-in trace or in the messenger must not fail every verbose consumer.
  *
  * @internal
  */
 final readonly class VerboseListener implements PropertyListener
 {
-    public function __construct(
-        private Messenger $messenger,
-    ) {}
+    private TraceListener $trace;
+
+    public function __construct(Messenger $messenger)
+    {
+        // On CHANNEL_STDERR, like the distribution report: Testo's terminal
+        // renderer shows every other channel only at `-v`, and a trace someone
+        // switched on with PROPERTY_VERBOSE must not need a second switch.
+        $this->trace = new TraceListener(static function (string $line) use ($messenger): void {
+            $messenger->log(Messenger::CHANNEL_STDERR, $line, Level::Info);
+        });
+    }
 
     #[\Override]
     public function onEvent(PropertyEvent $event): void
     {
-        try {
-            if ($event instanceof RunStarted) {
-                $this->log(sprintf(
-                    'Property "%s" attempt %d: %s',
-                    $this->name($event->propertyId),
-                    $event->attempt,
-                    $this->formatArguments($event->arguments),
-                ));
-            } elseif ($event instanceof RunPassed || $event instanceof RunFailed || $event instanceof RunDiscarded) {
-                if ($event->draws !== []) {
-                    $this->log(sprintf(
-                        'Property "%s" attempt %d draws: %s',
-                        $this->name($event->propertyId),
-                        $event->attempt,
-                        $this->formatArguments($event->draws),
-                    ));
-                }
-            } elseif ($event instanceof TargetImproved) {
-                $this->log(sprintf(
-                    'Property "%s" target %s %s: %s -> %s (%s)',
-                    $this->name($event->propertyId),
-                    $event->label,
-                    $event->direction->value === 'maximize' ? 'max' : 'min',
-                    $event->previous === null ? '-' : ValueRenderer::render($event->previous),
-                    ValueRenderer::render($event->score),
-                    $this->formatArguments($event->arguments),
-                ));
-            } elseif ($event instanceof ShrinkAccepted) {
-                $this->log(sprintf(
-                    'Property "%s" shrink step %d: %s=%s -> %s',
-                    $this->name($event->propertyId),
-                    $event->step,
-                    $event->parameter,
-                    ValueRenderer::render($event->before),
-                    ValueRenderer::render($event->after),
-                ));
-            }
-        } catch (\Throwable) {
-            // Deliberately swallowed — see the class docblock.
-        }
-    }
-
-    /**
-     * The display name the package's messages use: the method part of a
-     * `Class::method` property id.
-     */
-    private function name(string $propertyId): string
-    {
-        $separator = strrpos($propertyId, '::');
-
-        return $separator === false ? $propertyId : substr($propertyId, $separator + 2);
-    }
-
-    /**
-     * @param array<string, mixed> $arguments
-     */
-    private function formatArguments(array $arguments): string
-    {
-        $pairs = array_map(
-            static fn(mixed $value, mixed $name): string => $name . '=' . ValueRenderer::render($value),
-            $arguments,
-            array_keys($arguments),
-        );
-
-        return implode(', ', $pairs);
-    }
-
-    /**
-     * On CHANNEL_STDERR, like the distribution report: Testo's terminal
-     * renderer shows every other channel only at `-v`, and a trace someone
-     * switched on with PROPERTY_VERBOSE must not need a second switch.
-     *
-     * @param non-empty-string $line
-     */
-    private function log(string $line): void
-    {
-        $this->messenger->log(Messenger::CHANNEL_STDERR, $line, Level::Info);
+        $this->trace->onEvent($event);
     }
 }

@@ -129,11 +129,17 @@ the CI steps on top. Isolating only `PROPERTY_DB` is not enough — this suite
 asserts on seeds, run counts and printed messages, and an exported
 `PROPERTY_RUNS=7` alone reddened 76 tests with no hint of the cause.
 
-**Diagnostics print in a fixed order: the discard warning first, then the
-distribution.** Both adapters emit the same two lines for the same run, and a
-log that merges the two streams must not show them in different orders. The
-order is pinned here and in the PHPUnit adapter's `AGENTS.md`; changing it means
-changing both.
+**Diagnostics print in a fixed order: the discard warning, the
+discarded-examples warning, the distribution, the tables, the exhaustive line,
+the search report.** Both adapters emit the same lines for the same run, and a
+log that merges the two streams must not show them in different orders. Since
+core 1.5 the wording and the order live in the engine
+(`Runner\DiagnosticLines`, `Runner\TraceListener`); this adapter only maps a
+`DiagnosticLevel` onto `Messenger::CHANNEL_STDERR` and a log level. Do not
+re-implement a line here — change it in core, where both adapters pick it up.
+The variable table above is resolved by core's `Runner\Environment`
+(`fromVariables()` + `config()`); the adapter reads `getenv()` and keeps only
+the seed draw and the path-without-seed message, which are its own.
 
 **Both lines go to `Messenger::CHANNEL_STDERR`.** Testo's terminal renderer
 writes that channel through as-is; every other channel streams only at

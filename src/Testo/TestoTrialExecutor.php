@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Rasuvaeff\PropertyTesting\Testo;
 
 use Rasuvaeff\PropertyTesting\AssumptionSkipped;
+use Rasuvaeff\PropertyTesting\Runner\FailOnTrialExecutor;
 use Rasuvaeff\PropertyTesting\Runner\TrialExecutor;
 use Rasuvaeff\PropertyTesting\Runner\TrialOutcome;
 use Testo\Assert;
@@ -73,37 +74,13 @@ final class TestoTrialExecutor implements TrialExecutor
     {
         ++$this->runs;
 
-        $reportingAtStart = error_reporting();
-        if ($this->failOn !== 0) {
-            /** @var array{handler: mixed} $handlerState */
-            $handlerState = ['handler' => null];
-            $handler = function (
-                int $severity,
-                string $message,
-                string $file,
-                int $line,
-            ) use (&$handlerState, $reportingAtStart): bool {
-                // An explicit failOn is allowed to see levels Testo masks for
-                // the suite (notably E_DEPRECATED and E_NOTICE). The error
-                // control operator changes error_reporting() for the handler,
-                // so a level that was suppressed with @ remains suppressed.
-                $suppressed = ($reportingAtStart !== error_reporting()) && (($severity & error_reporting()) === 0);
-
-                if (!$suppressed && ($severity & $this->failOn) !== 0) {
-                    throw new \ErrorException($message, 0, $severity, $file, $line);
-                }
-
-                if (is_callable($handlerState['handler'])) {
-                    return (bool) ($handlerState['handler'])($severity, $message, $file, $line);
-                }
-
-                return false;
-            };
-            $handlerState['handler'] = set_error_handler($handler);
-        }
-
         try {
-            $result = ($this->next)($this->info->with(arguments: array_values($arguments)));
+            // Core's handler, around the pipeline call only: the throw it
+            // raises must land in the catches below like any other failure.
+            $result = FailOnTrialExecutor::guard(
+                $this->failOn,
+                fn(): TestResult => ($this->next)($this->info->with(arguments: array_values($arguments))),
+            );
         } catch (AssumptionSkipped) {
             return TrialOutcome::discarded();
         } catch (SkipTest|CancelTest $skip) {
@@ -122,10 +99,6 @@ final class TestoTrialExecutor implements TrialExecutor
             // must reach the engine as one — escaping here would abort the
             // whole property with no counterexample.
             return $this->verdict($failure);
-        } finally {
-            if ($this->failOn !== 0) {
-                restore_error_handler();
-            }
         }
 
         foreach (array_keys($result->attributes) as $key) {
