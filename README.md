@@ -473,7 +473,13 @@ line: each `Classify::tabulate()` table with its tag shares and the pairs hit
 together, whether exhaustive mode walked the domain or why it sampled, and
 the search report (`evaluations`, per label the best score and the number of
 improvements). `PROPERTY_VERBOSE` also logs every `TargetImproved` event with
-the input that scored it.
+the input that scored it. An explicit example the body discarded with
+`Assume::that()` still passes, but gets a warning: it checked nothing.
+
+The wording and order of these lines, and of the `PROPERTY_VERBOSE` trace, are
+the engine's (`DiagnosticLines`, `TraceListener`), shared with the PHPUnit
+adapter; this package only chooses the channel. A share is rounded half up on
+the exact ratio (`23/40` reads 58%).
 
 ### Generators
 
@@ -492,8 +498,10 @@ Everything there is usable from a `#[Property]` test as-is.
 
 `TestoTrialExecutor` and `VerboseListener` are `@internal`: the interceptor's
 implementation, not a contract. The environment variables and the `PROPERTY_DB`
-DSN are parsed by the engine (`EnvironmentOverrides`, `CorpusFactory`), so
-they mean the same thing under the PHPUnit adapter.
+DSN are parsed by the engine (`Environment`, `CorpusFactory`), which also
+applies the precedence between a variable and the attribute, so they mean the
+same thing under the PHPUnit adapter. `failOn` is the engine's
+`FailOnTrialExecutor` handler.
 
 ### Listeners
 

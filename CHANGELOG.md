@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.0 — 2026-11-21
+
+- **Changed:** the diagnostics, the `PROPERTY_VERBOSE` trace, the `PROPERTY_*`
+  resolution and the `failOn` handler come from `rasuvaeff/property-testing-core`
+  1.5 (`DiagnosticLines`, `TraceListener`, `Environment`, `FailOnTrialExecutor`,
+  `RunStatistics::of()`) instead of a copy kept in step with the PHPUnit adapter
+  by hand (#83). Texts, channels and order are unchanged, with one exception: a
+  share on an exact half is rounded up on the exact ratio, so `23/40` now reads
+  58% under PHP 8.4+, where the float ratio printed 57% (PHP 8.3 already printed
+  58%).
+- **Added:** a warning when the body discarded an explicit example with
+  `Assume::that()` — the example passes but checked nothing
+  (rasuvaeff/property-testing-core#188).
+- deps: `rasuvaeff/property-testing-core` `^1.2` → `^1.5`.
+
 ## 1.2.1 — 2026-11-20
 
 - **Fixed:** the `PROPERTY_VERBOSE` trace went to Testo's `CHANNEL_STDOUT`, which the terminal renderer shows only with `-v` — observed in a real run on Testo 0.10.59: without `-v`, no trace line for a passing or a failing property. It is now on `CHANNEL_STDERR`, like the distribution report and the discard warning, and shows at normal verbosity (#84).
