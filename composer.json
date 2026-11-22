@@ -23,8 +23,8 @@
         "source": "https://github.com/rasuvaeff/property-testing-testo"
     },
     "require": {
-        "php": "8.3 - 8.6",
-        "rasuvaeff/property-testing-core": "^1.5",
+        "php": "8.2 - 8.6",
+        "rasuvaeff/property-testing-core": "^1.6",
         "testo/assert": "^0.1.15",
         "testo/testo": "^0.10.39"
     },

@@ -2893,8 +2893,8 @@ final class PropertyInterceptorTest
             caseInfo: new CaseInfo(
                 definition: new CaseDefinition(name: 'Stub', type: 'test', file: Path::create(__FILE__)),
                 suiteIdentity: new SuiteIdentity('Unit'),
-                instance: new readonly class ($instance) implements CaseInstance {
-                    public function __construct(private object $instance) {}
+                instance: new class ($instance) implements CaseInstance {
+                    public function __construct(private readonly object $instance) {}
 
                     #[\Override]
                     public function getInstance(): object

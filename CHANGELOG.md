@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.0 — 2026-11-22
+
+- **Changed:** PHP 8.2 is supported: the `php` constraint is widened to
+  `8.2 - 8.6`, the same lower bound as `testo/testo` (#90). Requires
+  `rasuvaeff/property-testing-core` `^1.6`, the first core release on 8.2.
+  CI runs PHP 8.2, and `Prefer lowest` runs on it.
+
 ## 1.3.1 — 2026-11-21
 
 - **Changed:** PHP 8.6 is supported: the `php` constraint is widened to

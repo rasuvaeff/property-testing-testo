@@ -80,6 +80,7 @@ jobs:
       fail-fast: false
       matrix:
         php:
+          - '8.2'
           - '8.3'
           - '8.4'
           - '8.5'
@@ -112,6 +113,21 @@ jobs:
       # a real runtime dependency that refuses 8.6). Neither is needed here:
       # the BC check has its own job, require-checker runs on 8.3-8.5. Remove
       # this step once both allow 8.6.
+      # infection (and testo/bridge-infection through its adapter), roave,
+      # require-checker and rector-named-literals require PHP 8.3+. None of
+      # them is needed for the runtime contract this job checks: mutation runs
+      # in the coverage job, the BC check and rector in their own jobs,
+      # require-checker on 8.3-8.5. Dropping them keeps the resolution honest
+      # instead of --ignore-platform-req, which would also hide a real runtime
+      # dependency that refuses 8.2.
+      - name: Drop dev tools without PHP 8.2 support
+        if: ${{ matrix.php == '8.2' }}
+        run: >-
+          composer remove --dev --no-update --no-interaction
+          infection/infection testo/bridge-infection
+          roave/backward-compatibility-check maglnet/composer-require-checker
+          rasuvaeff/rector-named-literals
+
       - name: Drop dev tools without PHP 8.6 support
         if: ${{ matrix.php == '8.6' }}
         run: >-
@@ -122,8 +138,20 @@ jobs:
         run: composer install --no-interaction --no-progress --prefer-dist
 
       - name: Build
-        if: ${{ matrix.php != '8.6' }}
+        if: ${{ matrix.php != '8.2' && matrix.php != '8.6' }}
         run: composer build
+
+      # `composer build` minus require-checker (dropped above). Psalm runs here
+      # on purpose: it checks built-in classes and methods against the PHP it
+      # runs on, so the 8.4 static-analysis job cannot see an 8.3-only call.
+      - name: Build (PHP 8.2)
+        if: ${{ matrix.php == '8.2' }}
+        run: |
+          composer validate --strict
+          composer normalize --dry-run
+          composer cs
+          composer psalm
+          composer test
 
       # `composer build` minus cs (php-cs-fixer refuses 8.6 syntax) and minus
       # require-checker (dropped above). Style and require-checker are covered
@@ -151,7 +179,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
-          php-version: '8.3'
+          php-version: '8.2'
           coverage: none
           extensions: mbstring
           tools: composer:v2
@@ -163,11 +191,25 @@ jobs:
           key: composer-${{ runner.os }}-${{ hashFiles('**/composer.json') }}
           restore-keys: composer-${{ runner.os }}-
 
+      # Lowest bounds are checked on the lowest supported PHP. The same dev
+      # tools as in the PHP 8.2 build job require 8.3+ and are dropped.
+      - name: Drop dev tools without PHP 8.2 support
+        run: >-
+          composer remove --dev --no-update --no-interaction
+          infection/infection testo/bridge-infection
+          roave/backward-compatibility-check maglnet/composer-require-checker
+          rasuvaeff/rector-named-literals
+
       - name: Install dependencies
         run: composer update --prefer-lowest --prefer-stable --no-interaction --no-progress
 
       - name: Build
-        run: composer build
+        run: |
+          composer validate --strict
+          composer normalize --dry-run
+          composer cs
+          composer psalm
+          composer test
 
   windows:
     name: Windows

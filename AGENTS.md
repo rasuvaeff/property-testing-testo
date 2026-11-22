@@ -204,6 +204,15 @@ replay (`PropertyDefinition::$replayRegressions = false`), the **env**
   additionally skips the dead-code rules on `tests/`.
 - Code: `declare(strict_types=1)`, `final readonly class`, `#[\Override]`,
   explicit types.
+- **PHP 8.2 is the floor, kept for parity with `testo/testo`** (#90, core
+  1.6.0). That makes this package an exception to the monorepo's PHP 8.3 style
+  rules: no typed class constants (`private const X`, not
+  `private const int X`), no `new readonly class`, no 8.3+ built-ins
+  (`json_validate()`, `mb_str_pad()`, `Randomizer::getFloat()`…). `rector.php`
+  uses the `php82` set and `.php-cs-fixer.php` `@PHP82Migration` for this
+  reason — do not "restore" them from `templates/`. The PHP 8.2 CI job is the
+  only place psalm sees an 8.3-only call, since psalm checks built-ins against
+  the PHP it runs on. `#[\Override]` stays: 8.2 ignores an unknown attribute.
 - `examples/` is part of the public contract: the scripts are `#[Property]`
   test cases in the `Examples` suite of `testo.php`
   (`vendor/bin/testo --suite=Examples`), and each also runs as a plain PHP
