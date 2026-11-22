@@ -29,7 +29,7 @@ installation fails at resolution time.
   resolves to a method on the property class, then to an external callable;
   non-string callables are stored as `Closure` and invoked during resolution.
   Default convention remains `<testMethod>Generators` / `<testMethod>Examples`.
-- PHP 8.3+: reusable providers can be passed as
+- PHP 8.2+: reusable providers can be passed as
   `[Provider::class, 'method']`, `'Provider::method'`, or an invokable object
   (`new Provider()`). PHP 8.5 also allows an inline static closure and a
   first-class callable (`Provider::method(...)`).

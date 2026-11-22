@@ -17,7 +17,7 @@ return (new Config())
     ->setUsingCache(false)
     ->setRules([
         '@PER-CS3.0' => true,
-        '@PHP83Migration' => true,
+        '@PHP82Migration' => true,
         'ordered_imports' => ['imports_order' => ['class', 'function', 'const']],
         'no_unused_imports' => true,
         'trailing_comma_in_multiline' => ['elements' => ['arrays', 'arguments', 'parameters']],

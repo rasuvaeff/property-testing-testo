@@ -46,7 +46,7 @@ use Testo\Core\Value\Status;
  */
 final class TestoTrialExecutor implements TrialExecutor
 {
-    private const string DURATION = 'duration';
+    private const DURATION = 'duration';
 
     /** @var array<non-empty-string, mixed> */
     private array $attributes = [];

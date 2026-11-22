@@ -320,9 +320,9 @@ final class EventOrderTest
     public function anEngineExceptionThrownOutOfTheRunIsAnErrorOfTheTest(): void
     {
         $failure = new GenerationExhaustedException('Gen::filter()', 3, 'nothing passed');
-        $throwing = new readonly class ($failure) implements PropertyListener {
+        $throwing = new class ($failure) implements PropertyListener {
             public function __construct(
-                private GenerationExhaustedException $failure,
+                private readonly GenerationExhaustedException $failure,
             ) {}
 
             #[\Override]

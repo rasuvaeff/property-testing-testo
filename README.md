@@ -55,8 +55,8 @@ mixed installation rather than let two copies of the namespace collide.
 
 ## Requirements
 
-- PHP 8.3 – 8.6
-- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^1.0`
+- PHP 8.2 – 8.6
+- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^1.6`
 - [`testo/testo`](https://packagist.org/packages/testo/testo) `^0.10.39`
 
 ## Installation
@@ -220,7 +220,7 @@ adapter.
 method on the property test class first; only when no such method exists are
 they treated as external callable names. Non-string callables are stored and
 invoked when the property is resolved, so an invokable provider can be written
-directly in a PHP 8.3 attribute:
+directly in an attribute (PHP 8.2+):
 
 ```php
 final readonly class DelayGenerators

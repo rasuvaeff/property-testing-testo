@@ -54,8 +54,8 @@ composer require --dev rasuvaeff/property-testing-testo
 
 ## Требования
 
-- PHP 8.3 – 8.6
-- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^1.0`
+- PHP 8.2 – 8.6
+- [`rasuvaeff/property-testing-core`](https://packagist.org/packages/rasuvaeff/property-testing-core) `^1.6`
 - [`testo/testo`](https://packagist.org/packages/testo/testo) `^0.10.39`
 
 ## Установка
@@ -219,7 +219,7 @@ public function anImageNarrowerThanTheProfileIsRejected(int $width, int $minWidt
 как имя метода тест-класса; только если такого метода нет, она считается именем
 внешнего callable. Нестрочные callable сохраняются и вызываются при разрешении
 property, поэтому invokable-провайдер можно передать прямо в атрибуте уже на
-PHP 8.3:
+PHP 8.2:
 
 ```php
 final readonly class DelayGenerators
