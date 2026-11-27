@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.4.1 — 2026-11-27
 
 - **Fixed:** `PROPERTY_DB_PASSWORD` is read and passed to core's
   `CorpusFactory::fromDsn()` as the Redis `AUTH` password, as core's
