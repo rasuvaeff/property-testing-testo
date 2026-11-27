@@ -383,6 +383,7 @@ what the attribute wrote down.
 | `PROPERTY_SEED` | Integer seed for any property whose attribute omits `seed` (replay a whole suite). An explicit attribute `seed` still wins |
 | `PROPERTY_VERBOSE` | Logs every run's generated arguments and each accepted shrink step, on Testo's stderr channel — shown without `-v`. Off for `''`, `0`, `false`, `off` and `no` (case-insensitive, trimmed); anything else enables. |
 | `PROPERTY_DB` | Directory path enabling the regression corpus, or a `redis://host[:port][/db][?prefix=key-prefix]` DSN (`rediss://` for TLS) for a corpus shared between CI and developers. Unset means off, nothing is written |
+| `PROPERTY_DB_PASSWORD` | Redis `AUTH` password for a `redis://`/`rediss://` `PROPERTY_DB`, kept out of the DSN so it never reaches a log line that quotes the DSN. Unset or empty means no `AUTH`; ignored for a directory |
 | `PROPERTY_PHASES` | Comma-separated stage list (`examples,corpus,random,shrink`, case-insensitive) that overrides the attribute — an unknown name throws rather than skipping a stage. `examples,corpus` is the fast pull-request gate |
 | `PROPERTY_DERANDOMIZE` | Derives every unset seed from the property id, making a whole suite reproducible without editing it. `''` leaves the attribute alone; `0`, `false`, `off` and `no` (case-insensitive, trimmed) force it off, overriding `derandomize: true`; anything else forces it on. |
 | `PROPERTY_PATH` | A recorded shrink descent replayed instead of searched for. **Requires a pinned seed** — `PROPERTY_SEED` or the attribute's — and is refused without one, because an unseeded property gets a random seed and the path would replay a run that never happened. An attribute `path` wins. It describes one failure, so run it with a filter on that one test — every other property would report the path as stale |
@@ -417,7 +418,7 @@ a suite told to share its corpus and quietly writing where nobody reads is
 worse than one that stops. A `PROPERTY_DB` with any other scheme — a `Rediss://`
 typo, another backend — is likewise an error, never a directory named after the
 scheme. Credentials in the DSN (`redis://user:pass@host`) are rejected rather
-than silently dropped; configure Redis AUTH out of band.
+than silently dropped; pass the Redis AUTH password in `PROPERTY_DB_PASSWORD`.
 
 #### How entries are recorded
 

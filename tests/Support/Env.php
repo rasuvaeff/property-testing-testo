@@ -76,6 +76,7 @@ final class Env
             'PROPERTY_SEED' => null,
             'PROPERTY_VERBOSE' => null,
             'PROPERTY_DB' => null,
+            'PROPERTY_DB_PASSWORD' => null,
             'PROPERTY_PHASES' => null,
             'PROPERTY_DERANDOMIZE' => null,
             'PROPERTY_PATH' => null,

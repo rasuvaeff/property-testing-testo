@@ -12,7 +12,6 @@ use Rasuvaeff\PropertyTesting\PropertyListener;
 use Rasuvaeff\PropertyTesting\PropertyTestingException;
 use Rasuvaeff\PropertyTesting\Runner\Clock;
 use Rasuvaeff\PropertyTesting\Runner\Corpus;
-use Rasuvaeff\PropertyTesting\Runner\CorpusFactory;
 use Rasuvaeff\PropertyTesting\Runner\DiagnosticLevel;
 use Rasuvaeff\PropertyTesting\Runner\DiagnosticLines;
 use Rasuvaeff\PropertyTesting\Runner\Environment;
@@ -163,7 +162,7 @@ final readonly class PropertyInterceptor implements TestRunInterceptor
                 replayRegressions: $property->seed === null,
             );
 
-            $corpus = $environment->db === null ? null : CorpusFactory::fromDsn($environment->db);
+            $corpus = EnvironmentCorpus::of($environment);
         } catch (\InvalidArgumentException $misconfiguration) {
             // A property that cannot be set up is an error of this test, named
             // by its message — not an aborted pipeline with the reason buried

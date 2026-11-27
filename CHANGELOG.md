@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.1 — 2026-11-27
+
+- **Fixed:** `PROPERTY_DB_PASSWORD` is read and passed to core's
+  `CorpusFactory::fromDsn()` as the Redis `AUTH` password, as core's
+  documentation promised since 0.10.0. Before, the variable was ignored, so a
+  shared Redis corpus behind `requirepass` could not be used: credentials in
+  the DSN are rejected and every command failed with `NOAUTH`. Unset or empty
+  means no `AUTH`; the password is never echoed. Fixes #92.
+
 ## 1.4.0 — 2026-11-22
 
 - **Changed:** PHP 8.2 is supported: the `php` constraint is widened to
